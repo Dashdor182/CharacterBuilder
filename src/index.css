@@ -1,0 +1,72 @@
+@import "tailwindcss";
+
+/* Base reset */
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: rgb(28 25 23 / 0.5);
+}
+::-webkit-scrollbar-thumb {
+  background: rgb(87 83 78 / 0.8);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgb(120 113 108 / 0.8);
+}
+
+/* Prose styles for spell/feat descriptions */
+.prose-xs p { margin: 0 0 0.5em; }
+.prose-xs ul, .prose-xs ol { margin: 0.25em 0; padding-left: 1.25em; }
+.prose-xs li { margin: 0.125em 0; }
+.prose-xs table { width: 100%; border-collapse: collapse; margin: 0.5em 0; font-size: 0.75em; }
+.prose-xs th, .prose-xs td { border: 1px solid rgb(68 64 60); padding: 0.25em 0.5em; text-align: left; }
+.prose-xs strong { color: rgb(245 158 11); font-weight: 600; }
+.prose-xs em { color: rgb(161 161 170); font-style: italic; }
+.prose-xs h2, .prose-xs h3, .prose-xs h4 { color: rgb(214 211 209); font-weight: 600; margin: 0.5em 0 0.25em; }
+.prose-xs hr { border-color: rgb(68 64 60); margin: 0.5em 0; }
+.prose-xs aside { border-left: 3px solid rgb(120 113 108); padding-left: 0.75em; margin: 0.5em 0; }
+
+/* Print styles */
+@media print {
+  @page {
+    size: letter;
+    margin: 0.5in;
+  }
+
+  body { background: white !important; color: black !important; }
+  nav, .print\:hidden { display: none !important; }
+  main { padding-top: 0 !important; }
+
+  .border-stone-700\/50 { border-color: #ccc !important; }
+  .bg-stone-900\/30, .bg-stone-800\/50, .bg-stone-900 { background: white !important; }
+  .text-stone-100, .text-stone-200, .text-stone-300 { color: black !important; }
+  .text-stone-400, .text-stone-500, .text-stone-600 { color: #555 !important; }
+  .text-amber-400, .text-amber-300 { color: #7c3c00 !important; }
+  .text-red-400 { color: #900 !important; }
+  .text-blue-400 { color: #003d99 !important; }
+  .text-green-400 { color: #004d00 !important; }
+  .text-purple-400 { color: #5b0d8f !important; }
+
+  .border { border-color: #ccc !important; }
+  .rounded-xl, .rounded-lg { border-radius: 4px !important; }
+
+  section { page-break-inside: avoid; }
+}
