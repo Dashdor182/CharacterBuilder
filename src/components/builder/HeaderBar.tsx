@@ -1,7 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useCharacterStore } from '../../store/characterStore';
 import { useDataStore } from '../../store/dataStore';
+import { useUiStore } from '../../store/uiStore';
 import { Modal } from '../shared/Modal';
+import { PickerModal } from '../shared/ItemPicker';
+import type { PickerItem } from '../shared/ItemPicker';
 import { AncestrySection } from './sections/AncestrySection';
 import { BackgroundSection } from './sections/BackgroundSection';
 import { ClassSection } from './sections/ClassSection';
@@ -10,13 +13,19 @@ import { SkillsSection } from './sections/SkillsSection';
 import {
   computeAbilityScores, abilityModifier, formatModifier, ABILITIES, ABILITY_SHORT,
 } from '../../utils/calculations';
+import type { Ability } from '../../types/pf2e';
 
 type ModalType = 'ancestry' | 'background' | 'class' | 'ability-scores' | 'skills' | null;
+type PickerType = 'ancestry' | 'background' | 'class';
+
+const RARITY_ORDER: Record<string, number> = { common: 0, uncommon: 1, rare: 2, unique: 3 };
 
 export const HeaderBar: React.FC = () => {
-  const { character, updateIdentity } = useCharacterStore();
+  const { character, updateIdentity, setAncestry, setBackground, setClass } = useCharacterStore();
   const { gameData } = useDataStore();
+  const { showTooltip, hideTooltip, showConfirm } = useUiStore();
   const [openModal, setOpenModal] = useState<ModalType>(null);
+  const [openPicker, setOpenPicker] = useState<PickerType | null>(null);
 
   const scores = computeAbilityScores(character.abilityBoosts, character.manualAbilityScores);
 
@@ -26,6 +35,108 @@ export const HeaderBar: React.FC = () => {
     : null;
   const background = gameData?.backgrounds.find(b => b._id === character.backgroundId);
   const cls = gameData?.classes.find(c => c._id === character.classId);
+
+  // --- Picker item lists ---
+
+  const ancestryItems = useMemo((): PickerItem[] => {
+    if (!gameData) return [];
+    return gameData.ancestries
+      .sort((a, b) => {
+        const ra = RARITY_ORDER[a.system.traits?.rarity ?? 'common'] ?? 0;
+        const rb = RARITY_ORDER[b.system.traits?.rarity ?? 'common'] ?? 0;
+        return ra - rb || a.name.localeCompare(b.name);
+      })
+      .map(a => {
+        const rarity = a.system.traits?.rarity ?? 'common';
+        return {
+          id: a._id,
+          name: a.name,
+          subtitle: `${a.system.hp} HP · ${a.system.speed} ft`,
+          tag: rarity !== 'common' ? rarity : undefined,
+          tagColor: rarity === 'rare'
+            ? 'bg-blue-900/50 text-blue-400'
+            : rarity === 'uncommon'
+              ? 'bg-amber-900/50 text-amber-500'
+              : undefined,
+          rawItem: a,
+        };
+      });
+  }, [gameData]);
+
+  const backgroundItems = useMemo((): PickerItem[] => {
+    if (!gameData) return [];
+    return gameData.backgrounds
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .map(b => {
+        const skills = b.system.trainedSkills?.value ?? [];
+        return {
+          id: b._id,
+          name: b.name,
+          subtitle: skills.length > 0 ? skills.join(', ') : undefined,
+          rawItem: b,
+        };
+      });
+  }, [gameData]);
+
+  const classItems = useMemo((): PickerItem[] => {
+    if (!gameData) return [];
+    return gameData.classes
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .map(c => {
+        const keyAbilities = c.system.keyAbility?.value ?? [];
+        return {
+          id: c._id,
+          name: c.name,
+          subtitle: `${c.system.hp} HP${keyAbilities.length > 0 ? ` · ${keyAbilities.map(a => ABILITY_SHORT[a as Ability]).join('/')}` : ''}`,
+          rawItem: c,
+        };
+      });
+  }, [gameData]);
+
+  // --- Picker selection handlers ---
+
+  const handlePickAncestry = (id: string) => {
+    if (!gameData) return;
+    const ancestryData = gameData.ancestries.find(a => a._id === id);
+    const fixedBoosts: Partial<Record<Ability, boolean>> = {};
+    const fixedFlaws: Partial<Record<Ability, boolean>> = {};
+    if (ancestryData) {
+      for (const group of Object.values(ancestryData.system.boosts ?? {})) {
+        const v = (group.value ?? []) as Ability[];
+        if (v.length === 1 && v[0] !== ('anything' as Ability)) fixedBoosts[v[0]] = true;
+      }
+      for (const group of Object.values(ancestryData.system.flaws ?? {})) {
+        const v = (group.value ?? []) as Ability[];
+        if (v.length === 1) fixedFlaws[v[0]] = true;
+      }
+    }
+    setAncestry(id, fixedBoosts, fixedFlaws);
+    setOpenPicker(null);
+    setOpenModal('ancestry');
+  };
+
+  const handlePickBackground = (id: string) => {
+    setBackground(id);
+    setOpenPicker(null);
+    setOpenModal('background');
+  };
+
+  const handlePickClass = (id: string) => {
+    if (character.classId && character.classId !== id) {
+      showConfirm(
+        'Changing your class will clear class feats and spellcasting choices. Continue?',
+        () => {
+          setClass(id, true);
+          setOpenPicker(null);
+          setOpenModal('class');
+        },
+      );
+    } else {
+      setClass(id, false);
+      setOpenPicker(null);
+      setOpenModal('class');
+    }
+  };
 
   return (
     <div className="sticky top-14 z-20 bg-stone-900 border-b border-stone-700/50 shadow-lg">
@@ -67,17 +178,23 @@ export const HeaderBar: React.FC = () => {
               ? `${ancestry.name}${heritage ? ` · ${heritage.name}` : ''}`
               : undefined}
             placeholder="Choose Ancestry"
-            onClick={() => setOpenModal('ancestry')}
+            onClick={() => character.ancestryId ? setOpenModal('ancestry') : setOpenPicker('ancestry')}
+            onEdit={() => setOpenPicker('ancestry')}
+            hasValue={!!character.ancestryId}
           />
           <SelectionPill
             value={background?.name}
             placeholder="Choose Background"
-            onClick={() => setOpenModal('background')}
+            onClick={() => character.backgroundId ? setOpenModal('background') : setOpenPicker('background')}
+            onEdit={() => setOpenPicker('background')}
+            hasValue={!!character.backgroundId}
           />
           <SelectionPill
             value={cls?.name}
             placeholder="Choose Class"
-            onClick={() => setOpenModal('class')}
+            onClick={() => character.classId ? setOpenModal('class') : setOpenPicker('class')}
+            onEdit={() => setOpenPicker('class')}
+            hasValue={!!character.classId}
           />
         </div>
 
@@ -112,7 +229,45 @@ export const HeaderBar: React.FC = () => {
         </div>
       </div>
 
-      {/* Section modals */}
+      {/* Direct picker modals (opened from pills) */}
+      {openPicker === 'ancestry' && (
+        <PickerModal
+          items={ancestryItems}
+          selectedId={character.ancestryId}
+          title="Select Ancestry"
+          searchPlaceholder="Search ancestries…"
+          onSelect={handlePickAncestry}
+          onClose={() => setOpenPicker(null)}
+          showTooltip={showTooltip}
+          hideTooltip={hideTooltip}
+        />
+      )}
+      {openPicker === 'background' && (
+        <PickerModal
+          items={backgroundItems}
+          selectedId={character.backgroundId}
+          title="Select Background"
+          searchPlaceholder="Search backgrounds…"
+          onSelect={handlePickBackground}
+          onClose={() => setOpenPicker(null)}
+          showTooltip={showTooltip}
+          hideTooltip={hideTooltip}
+        />
+      )}
+      {openPicker === 'class' && (
+        <PickerModal
+          items={classItems}
+          selectedId={character.classId}
+          title="Select Class"
+          searchPlaceholder="Search classes…"
+          onSelect={handlePickClass}
+          onClose={() => setOpenPicker(null)}
+          showTooltip={showTooltip}
+          hideTooltip={hideTooltip}
+        />
+      )}
+
+      {/* Section detail modals */}
       <Modal open={openModal === 'ancestry'} onClose={() => setOpenModal(null)} title="Ancestry & Heritage" maxWidth="max-w-2xl">
         <AncestrySection />
       </Modal>
@@ -157,7 +312,9 @@ const SelectionPill: React.FC<{
   value?: string;
   placeholder: string;
   onClick: () => void;
-}> = ({ value, placeholder, onClick }) => (
+  onEdit?: () => void;
+  hasValue?: boolean;
+}> = ({ value, placeholder, onClick, onEdit, hasValue }) => (
   <button
     onClick={onClick}
     className={`flex items-center gap-1.5 px-3 py-1 rounded-full border text-sm font-medium transition-colors ${
@@ -167,7 +324,20 @@ const SelectionPill: React.FC<{
     }`}
   >
     {value ? (
-      <><span className="text-amber-500/60 text-xs">✓</span><span>{value}</span></>
+      <>
+        <span className="text-amber-500/60 text-xs">✓</span>
+        <span>{value}</span>
+        {onEdit && hasValue && (
+          <span
+            role="button"
+            onClick={e => { e.stopPropagation(); onEdit(); }}
+            className="text-stone-500 hover:text-amber-400 text-xs ml-0.5 transition-colors"
+            title="Change selection"
+          >
+            ✎
+          </span>
+        )}
+      </>
     ) : (
       <><span className="text-stone-600">+</span><span>{placeholder}</span></>
     )}
