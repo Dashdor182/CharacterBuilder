@@ -54,7 +54,7 @@ export const ProgressionView: React.FC = () => {
 
           // Gather everything happening at this level
           const classFeatures = classFeaturesByLevel[lvl] ?? [];
-          const featsHere = levelData?.feats.filter(f => f.selectedFeatId) ?? [];
+          const featsHere = (levelData?.feats ?? []).filter(f => f.selectedFeatId);
           const selectedFeats = featsHere.map(f => ({
             ...f,
             feat: gameData?.feats.find(feat => feat._id === f.selectedFeatId),
