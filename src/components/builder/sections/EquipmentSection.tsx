@@ -5,7 +5,7 @@ import { useUiStore } from '../../../store/uiStore';
 import { SearchBar } from '../../shared/SearchBar';
 import { TooltipTrigger } from '../../shared/Tooltip';
 import { Modal } from '../../shared/Modal';
-import { computeAbilityScores, abilityModifier, computeBulk, formatBulk, formatPrice } from '../../../utils/calculations';
+import { computeAbilityScores, abilityModifier, computeBulk, formatBulk, formatPrice, parseBulkValue } from '../../../utils/calculations';
 import type { EquipmentEntry, CarryType } from '../../../types/character';
 import type { PF2eArmor, PF2eWeapon, PF2eEquipment, GameData } from '../../../types/pf2e';
 

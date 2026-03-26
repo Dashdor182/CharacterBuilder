@@ -97,7 +97,7 @@ export const ItemPicker: React.FC<ItemPickerProps> = ({
   );
 };
 
-const PickerModal: React.FC<{
+export const PickerModal: React.FC<{
   items: PickerItem[];
   selectedId: string | null;
   title: string;
