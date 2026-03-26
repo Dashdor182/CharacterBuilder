@@ -1,8 +1,8 @@
-import React, { useState, useMemo } from 'react';
+import React, { useMemo } from 'react';
 import { useCharacterStore } from '../../../store/characterStore';
 import { useDataStore } from '../../../store/dataStore';
 import { useUiStore } from '../../../store/uiStore';
-import { SearchBar } from '../../shared/SearchBar';
+import { ItemPicker } from '../../shared/ItemPicker';
 import { TooltipTrigger } from '../../shared/Tooltip';
 import type { PF2eAncestry } from '../../../types/pf2e';
 import { ABILITY_SHORT } from '../../../utils/calculations';
@@ -14,27 +14,33 @@ export const AncestrySection: React.FC = () => {
   const { character, setAncestry, setHeritage, toggleAbilityBoost } = useCharacterStore();
   const { gameData } = useDataStore();
   const { showTooltip, hideTooltip } = useUiStore();
-  const [search, setSearch] = useState('');
 
-  const ancestries = useMemo(() => {
+  const ancestryItems = useMemo(() => {
     if (!gameData) return [];
-    const q = search.toLowerCase();
     return gameData.ancestries
-      .filter(a =>
-        !q ||
-        a.name.toLowerCase().includes(q) ||
-        (a.system.traits?.value ?? []).some(t => t.includes(q))
-      )
       .sort((a, b) => {
         const ra = RARITY_ORDER[a.system.traits?.rarity as keyof typeof RARITY_ORDER ?? 'common'] ?? 0;
         const rb = RARITY_ORDER[b.system.traits?.rarity as keyof typeof RARITY_ORDER ?? 'common'] ?? 0;
         return ra - rb || a.name.localeCompare(b.name);
+      })
+      .map(a => {
+        const rarity = a.system.traits?.rarity ?? 'common';
+        return {
+          id: a._id,
+          name: a.name,
+          subtitle: `${a.system.hp} HP · ${a.system.speed} ft`,
+          tag: rarity !== 'common' ? rarity : undefined,
+          tagColor: rarity === 'rare'
+            ? 'bg-blue-900/50 text-blue-400'
+            : rarity === 'uncommon'
+              ? 'bg-amber-900/50 text-amber-500'
+              : undefined,
+        };
       });
-  }, [gameData, search]);
+  }, [gameData]);
 
   const selected = gameData?.ancestries.find(a => a._id === character.ancestryId) ?? null;
 
-  // Heritages for selected ancestry
   const heritages = useMemo(() => {
     if (!gameData || !selected) return [];
     const ancestryName = selected.name.toLowerCase().replace(/\s+/g, '-');
@@ -47,68 +53,21 @@ export const AncestrySection: React.FC = () => {
     );
   }, [gameData, selected]);
 
-  const selectedHeritage = heritages.find(h => h._id === character.heritageId) ?? null;
-
-  const handleSelect = (a: PF2eAncestry) => {
-    if (a._id === character.ancestryId) {
-      setAncestry(null);
-    } else {
-      setAncestry(a._id);
-    }
-  };
-
   if (!gameData) return <p className="text-stone-500 text-sm">Loading data…</p>;
 
   return (
-    <div className="space-y-5">
-      {/* Search */}
-      <SearchBar value={search} onChange={setSearch} placeholder="Search ancestries…" />
+    <div className="space-y-4">
+      <ItemPicker
+        items={ancestryItems}
+        selectedId={character.ancestryId}
+        onSelect={id => setAncestry(id)}
+        placeholder="Choose an ancestry…"
+        searchPlaceholder="Search ancestries…"
+      />
 
-      {/* Ancestry grid */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
-        {ancestries.map(a => {
-          const isSelected = a._id === character.ancestryId;
-          const rarity = a.system.traits?.rarity ?? 'common';
-
-          return (
-            <TooltipTrigger
-              key={a._id}
-              item={a}
-              onShow={(item, rect) => showTooltip(item, rect)}
-              className="block"
-            >
-              <button
-                onClick={() => handleSelect(a)}
-                onMouseLeave={hideTooltip}
-                className={`
-                  w-full text-left px-3 py-2.5 rounded-lg border transition-all text-sm
-                  ${isSelected
-                    ? 'border-amber-500 bg-amber-600/20 text-amber-300'
-                    : rarity !== 'common'
-                      ? 'border-stone-600 bg-stone-800/50 text-stone-300 hover:border-stone-500 hover:bg-stone-800'
-                      : 'border-stone-700/50 bg-stone-900/50 text-stone-400 hover:border-stone-600 hover:text-stone-300 hover:bg-stone-800/50'
-                  }
-                `}
-              >
-                <div className="font-medium">{a.name}</div>
-                <div className="text-xs text-stone-500 mt-0.5">
-                  {a.system.hp} HP · {a.system.speed} ft
-                  {rarity !== 'common' && (
-                    <span className={`ml-1 ${rarity === 'rare' ? 'text-blue-400' : 'text-amber-500'}`}>
-                      [{rarity}]
-                    </span>
-                  )}
-                </div>
-              </button>
-            </TooltipTrigger>
-          );
-        })}
-      </div>
-
-      {/* Selected ancestry details */}
       {selected && (
         <div className="space-y-4 border-t border-stone-700/50 pt-4">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 flex-wrap">
             <h3 className="text-amber-400 font-semibold">{selected.name}</h3>
             <div className="text-xs text-stone-400">
               {selected.system.hp} HP · Speed {selected.system.speed} ft · {selected.system.size.toUpperCase()}
@@ -145,17 +104,14 @@ export const AncestrySection: React.FC = () => {
                   </TooltipTrigger>
                 ))}
               </div>
-              {selectedHeritage && (
-                <p className="text-xs text-stone-500 mt-2">Selected: {selectedHeritage.name}</p>
-              )}
             </div>
           )}
 
-          {/* Ability boosts from ancestry */}
+          {/* Ability boosts */}
           <AncestryBoosts ancestry={selected} character={character} onToggle={toggleAbilityBoost} />
 
           {/* Languages */}
-          {selected.system.languages?.value?.length > 0 && (
+          {(selected.system.languages?.value?.length ?? 0) > 0 && (
             <div>
               <label className="text-xs text-stone-400 font-medium uppercase tracking-wide">Languages</label>
               <div className="flex flex-wrap gap-1.5 mt-1.5">
@@ -200,7 +156,6 @@ const AncestryBoosts: React.FC<{
       {/* Boosts */}
       {boostGroups.map((group, i) => {
         const options = group.value ?? [];
-        // If "anything" (empty or contains 'anything'), show all abilities
         const isFree = options.length === 0 || options.includes('anything' as Ability);
         const abilities: Ability[] = isFree
           ? ['str', 'dex', 'con', 'int', 'wis', 'cha']

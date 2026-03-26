@@ -1,84 +1,58 @@
-import React, { useState, useMemo } from 'react';
+import React, { useMemo } from 'react';
 import { useCharacterStore } from '../../../store/characterStore';
 import { useDataStore } from '../../../store/dataStore';
 import { useUiStore } from '../../../store/uiStore';
-import { SearchBar } from '../../shared/SearchBar';
-import { TooltipTrigger } from '../../shared/Tooltip';
+import { ItemPicker } from '../../shared/ItemPicker';
 import { ABILITY_SHORT, PROF_RANK_LABELS } from '../../../utils/calculations';
 import type { Ability, PF2eClass } from '../../../types/pf2e';
 
 export const ClassSection: React.FC = () => {
   const { character, setClass, setKeyAbility } = useCharacterStore();
   const { gameData } = useDataStore();
-  const { showTooltip, hideTooltip, showConfirm } = useUiStore();
-  const [search, setSearch] = useState('');
+  const { showConfirm } = useUiStore();
 
-  const classes = useMemo(() => {
+  const classItems = useMemo(() => {
     if (!gameData) return [];
-    const q = search.toLowerCase();
     return gameData.classes
-      .filter(c => !q || c.name.toLowerCase().includes(q))
-      .sort((a, b) => a.name.localeCompare(b.name));
-  }, [gameData, search]);
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .map(c => {
+        const keyAbilities = c.system.keyAbility?.value ?? [];
+        return {
+          id: c._id,
+          name: c.name,
+          subtitle: `${c.system.hp} HP${keyAbilities.length > 0 ? ` · ${keyAbilities.map(a => ABILITY_SHORT[a as Ability]).join('/')}` : ''}`,
+        };
+      });
+  }, [gameData]);
 
   const selected = gameData?.classes.find(c => c._id === character.classId) ?? null;
 
-  const handleSelect = (cls: PF2eClass) => {
-    if (cls._id === character.classId) {
+  const handleSelect = (id: string | null) => {
+    if (!id) {
       setClass(null);
       return;
     }
-    if (character.classId) {
+    if (character.classId && character.classId !== id) {
       showConfirm(
         'Changing your class will clear class feats and spellcasting choices. Continue?',
-        () => setClass(cls._id, true),
+        () => setClass(id, true),
       );
     } else {
-      setClass(cls._id, false);
+      setClass(id, false);
     }
   };
 
   if (!gameData) return <p className="text-stone-500 text-sm">Loading data…</p>;
 
   return (
-    <div className="space-y-5">
-      <SearchBar value={search} onChange={setSearch} placeholder="Search classes…" />
-
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
-        {classes.map(cls => {
-          const isSelected = cls._id === character.classId;
-          const keyAbilities = cls.system.keyAbility?.value ?? [];
-
-          return (
-            <TooltipTrigger
-              key={cls._id}
-              item={cls}
-              onShow={(item, rect) => showTooltip(item, rect)}
-              className="block"
-            >
-              <button
-                onClick={() => handleSelect(cls)}
-                onMouseLeave={hideTooltip}
-                className={`
-                  w-full text-left px-3 py-2.5 rounded-lg border transition-all text-sm
-                  ${isSelected
-                    ? 'border-amber-500 bg-amber-600/20 text-amber-300'
-                    : 'border-stone-700/50 bg-stone-900/50 text-stone-400 hover:border-stone-600 hover:text-stone-300 hover:bg-stone-800/50'
-                  }
-                `}
-              >
-                <div className="font-medium">{cls.name}</div>
-                <div className="text-xs text-stone-500 mt-0.5">
-                  {cls.system.hp} HP
-                  {keyAbilities.length > 0 && (
-                    <span> · {keyAbilities.map(a => ABILITY_SHORT[a as Ability]).join('/')}</span>
-                  )}
-                </div>
-              </button>
-            </TooltipTrigger>
-          );
-        })}
-      </div>
+    <div className="space-y-4">
+      <ItemPicker
+        items={classItems}
+        selectedId={character.classId}
+        onSelect={handleSelect}
+        placeholder="Choose a class…"
+        searchPlaceholder="Search classes…"
+      />
 
       {selected && (
         <ClassDetails
