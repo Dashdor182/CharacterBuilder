@@ -112,14 +112,22 @@ export const FeatsSection: React.FC = () => {
       <div className="rounded-lg border border-amber-700/40 bg-amber-900/20 p-4 text-sm space-y-2">
         <p className="text-amber-300 font-medium">Feats data not loaded</p>
         <p className="text-stone-400">
-          The feats pack failed to load (usually a GitHub API rate limit). Your other data is fine.
+          The feats pack failed to load. Try refreshing the page.
         </p>
-        <button
-          onClick={async () => { await clearCache(); window.location.reload(); }}
-          className="px-3 py-1.5 bg-amber-700 hover:bg-amber-600 text-white rounded text-xs font-medium transition-colors"
-        >
-          Clear cache &amp; reload
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => window.location.reload()}
+            className="px-3 py-1.5 bg-stone-700 hover:bg-stone-600 text-white rounded text-xs font-medium transition-colors"
+          >
+            Refresh
+          </button>
+          <button
+            onClick={async () => { await clearCache(); window.location.reload(); }}
+            className="px-3 py-1.5 bg-amber-700/70 hover:bg-amber-700 text-white rounded text-xs font-medium transition-colors"
+          >
+            Clear cache &amp; reload
+          </button>
+        </div>
       </div>
     );
   }
