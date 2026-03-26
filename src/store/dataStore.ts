@@ -20,11 +20,11 @@ export const useDataStore = create<DataState>((set, get) => ({
 
   loadData: async (forceRefresh = false) => {
     if (get().loading) return;
-    if (forceRefresh) clearCache();
 
     set({ loading: true, error: null, progress: { stage: 'Starting…', current: 0, total: 1 } });
 
     try {
+      if (forceRefresh) await clearCache();
       const data = await loadGameData(
         (progress: LoadProgress) => set({ progress }),
         forceRefresh,

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Modal } from './Modal';
 import { useUiStore } from '../../store/uiStore';
 import { useCharacterStore } from '../../store/characterStore';
@@ -11,8 +11,13 @@ export const SettingsPanel: React.FC = () => {
   const { loadData } = useDataStore();
   const { showConfirm, showNotification } = useUiStore();
 
-  const cacheInfo = getCacheInfo();
-  const cacheAgeHours = cacheInfo.age ? Math.round(cacheInfo.age / 3600000) : null;
+  const [cacheInfo, setCacheInfo] = useState<{ hasAssembled: boolean; packsStored: string[] } | null>(null);
+
+  useEffect(() => {
+    if (settingsOpen) {
+      getCacheInfo().then(setCacheInfo);
+    }
+  }, [settingsOpen]);
 
   const handleRefreshData = async () => {
     setSettingsOpen(false);
@@ -92,9 +97,15 @@ export const SettingsPanel: React.FC = () => {
         <section className="border-t border-stone-700/50 pt-5">
           <h3 className="text-sm font-semibold text-stone-300 mb-3">Game Data</h3>
           <div className="text-xs text-stone-500 mb-3">
-            {cacheInfo.age ? (
-              <span>
-                Cached {cacheAgeHours}h ago · {cacheInfo.itemCount?.toLocaleString()} items
+            {cacheInfo === null ? (
+              <span>Checking cache…</span>
+            ) : cacheInfo.hasAssembled ? (
+              <span className="text-green-500/80">
+                ✓ Cached · {cacheInfo.packsStored.length} packs stored locally
+              </span>
+            ) : cacheInfo.packsStored.length > 0 ? (
+              <span className="text-amber-500/80">
+                Partial cache · {cacheInfo.packsStored.length} packs stored
               </span>
             ) : (
               <span>No cached data</span>
