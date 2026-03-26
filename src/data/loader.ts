@@ -5,7 +5,7 @@
  *   1. Pre-bundled /data/pf2e-data.json  — instant, no network (run `npm run fetch-data`)
  *   2. IndexedDB assembled cache         — ~10ms, return visits after first load
  *   3. IndexedDB per-pack cache          — fetches only packs not yet stored
- *   4. GitHub API + raw.githubusercontent — first load only
+ *   4. GitHub API (manifest) + jsDelivr CDN (files) — first load only
  *
  * Data is pinned to PF2E_TAG (a release tag) so it never changes.
  * No TTL — the cache is valid forever as long as the tag matches.
@@ -153,10 +153,17 @@ async function buildManifest(onProgress: ProgressCallback): Promise<Manifest> {
 
   await Promise.all(relevantDirs.map(async dir => {
     type TreeItem = { type: string; path: string };
-    type TreeResponse = { tree: TreeItem[] };
-    const treeRes = await githubGet<TreeResponse>(`${GITHUB_API}/git/trees/${dir.sha}`);
+    type TreeResponse = { tree: TreeItem[]; truncated?: boolean };
+    const treeRes = await githubGet<TreeResponse>(`${GITHUB_API}/git/trees/${dir.sha}?recursive=1`);
+    if (treeRes.truncated) {
+      console.warn(`Tree for ${dir.name} was truncated by GitHub API — some items may be missing.`);
+    }
     packs[dir.name] = treeRes.tree
-      .filter(i => i.type === 'blob' && i.path.endsWith('.json') && !i.path.startsWith('_'))
+      .filter(i =>
+        i.type === 'blob' &&
+        i.path.endsWith('.json') &&
+        !i.path.split('/').some(part => part.startsWith('_'))
+      )
       .map(i => `packs/pf2e/${dir.name}/${i.path}`);
     done++;
     onProgress({ stage: `Indexing ${dir.name}… (${done}/${relevantDirs.length})`, current: 5 + Math.floor((done / relevantDirs.length) * 23), total: 100 });
