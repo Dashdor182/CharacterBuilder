@@ -332,12 +332,30 @@ export const useCharacterStore = create<CharacterStore>()(
       set(state => {
         const levels = state.character.levels.map((l, i) => {
           if (i !== levelIndex) return l;
-          return {
-            ...l,
-            feats: l.feats.map(slot =>
-              slot.id === slotId ? { ...slot, selectedFeatId: featId } : slot
-            ),
-          };
+          const exists = l.feats.some(slot => slot.id === slotId);
+          if (exists) {
+            // Update existing slot (or remove if featId is null)
+            return {
+              ...l,
+              feats: featId
+                ? l.feats.map(slot => slot.id === slotId ? { ...slot, selectedFeatId: featId } : slot)
+                : l.feats.map(slot => slot.id === slotId ? { ...slot, selectedFeatId: null } : slot),
+            };
+          } else if (featId) {
+            // Slot not yet in storage — insert it
+            // slotId format: "{type}-{level}", e.g. "class-3", "ancestry-1"
+            const dashIdx = slotId.lastIndexOf('-');
+            const type = slotId.slice(0, dashIdx) as FeatSlot['type'];
+            const slotLevel = parseInt(slotId.slice(dashIdx + 1), 10);
+            return {
+              ...l,
+              feats: [
+                ...l.feats,
+                { id: slotId, type, level: slotLevel, selectedFeatId: featId },
+              ],
+            };
+          }
+          return l;
         });
         return { character: { ...state.character, levels, updatedAt: Date.now() } };
       });
