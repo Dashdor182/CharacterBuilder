@@ -5,7 +5,7 @@ import { useUiStore } from '../../../store/uiStore';
 import { SearchBar } from '../../shared/SearchBar';
 import { TooltipTrigger } from '../../shared/Tooltip';
 import { Modal } from '../../shared/Modal';
-import { computeAbilityScores, abilityModifier, parseBulkValue, formatBulk, formatPrice } from '../../../utils/calculations';
+import { computeAbilityScores, abilityModifier, computeBulk, formatBulk, formatPrice } from '../../../utils/calculations';
 import type { EquipmentEntry, CarryType } from '../../../types/character';
 import type { PF2eArmor, PF2eWeapon, PF2eEquipment, GameData } from '../../../types/pf2e';
 
@@ -22,20 +22,14 @@ export const EquipmentSection: React.FC = () => {
     [character.abilityBoosts, character.manualAbilityScores]
   );
   const strMod = abilityModifier(scores.str);
-  const bulkLimit = 5 + strMod;
-  const encumberedAt = bulkLimit - 5;
+  // PF2e: encumbered when bulk > 5+Str, can't carry more than 10+Str
+  const encumberedAt = 5 + strMod;
+  const bulkLimit    = 10 + strMod;
 
-  const totalBulk = useMemo(() => {
-    if (!gameData) return 0;
-    let total = 0;
-    for (const entry of character.equipment) {
-      const item = findItem(gameData, entry.itemId);
-      if (!item) continue;
-      const bulk = parseBulkValue(item.system.bulk?.value);
-      total += bulk * entry.quantity;
-    }
-    return Math.round(total * 10) / 10;
-  }, [character.equipment, gameData]);
+  const { total: totalBulk, lightRemainder } = useMemo(
+    () => gameData ? computeBulk(character, gameData) : { total: 0, lightRemainder: 0 },
+    [character.equipment, character.currency, gameData],
+  );
 
   const handleAdd = (item: PF2eArmor | PF2eWeapon | PF2eEquipment) => {
     const existing = character.equipment.find(e => e.itemId === item._id);
@@ -58,7 +52,7 @@ export const EquipmentSection: React.FC = () => {
   return (
     <div className="space-y-4">
       {/* Bulk tracker */}
-      <BulkTracker total={totalBulk} limit={bulkLimit} encumberedAt={encumberedAt} />
+      <BulkTracker total={totalBulk} lightRemainder={lightRemainder} limit={bulkLimit} encumberedAt={encumberedAt} />
 
       {/* Currency */}
       <CurrencyTracker currency={character.currency} onChange={setCurrency} />
@@ -155,33 +149,53 @@ function findItem(gameData: GameData, id: string) {
   );
 }
 
-const BulkTracker: React.FC<{ total: number; limit: number; encumberedAt: number }> = ({
-  total, limit, encumberedAt,
-}) => {
-  const pct = Math.min((total / limit) * 100, 100);
+const BulkTracker: React.FC<{
+  total: number;
+  lightRemainder: number;
+  limit: number;
+  encumberedAt: number;
+}> = ({ total, lightRemainder, limit, encumberedAt }) => {
   const isEncumbered = total > encumberedAt;
-  const isOverLimit = total > limit;
+  const isOverLimit  = total > limit;
+  // Progress bar fills to encumbered threshold; goes red beyond it
+  const pct = Math.min((total / Math.max(limit, 1)) * 100, 100);
+  const encPct = Math.min((encumberedAt / Math.max(limit, 1)) * 100, 100);
+
+  const displayBulk = lightRemainder > 0 ? `${total} + ${lightRemainder}L` : String(total);
 
   return (
     <div className="bg-stone-900/50 rounded-lg p-3 border border-stone-700/30">
       <div className="flex items-center justify-between mb-2">
         <span className="text-xs text-stone-400 font-medium uppercase tracking-wide">Bulk</span>
         <span className={`text-sm font-mono ${isOverLimit ? 'text-red-400' : isEncumbered ? 'text-amber-400' : 'text-stone-300'}`}>
-          {formatBulk(total)} / {limit}
+          {displayBulk} / {limit}
         </span>
       </div>
-      <div className="h-2 bg-stone-800 rounded-full overflow-hidden">
+      {/* Bar: encumbered threshold marker + fill */}
+      <div className="relative h-2 bg-stone-800 rounded-full overflow-hidden">
         <div
-          className={`h-full rounded-full transition-all ${isOverLimit ? 'bg-red-600' : isEncumbered ? 'bg-amber-600' : 'bg-stone-500'}`}
+          className={`h-full rounded-full transition-all ${isOverLimit ? 'bg-red-600' : isEncumbered ? 'bg-amber-500' : 'bg-stone-500'}`}
           style={{ width: `${pct}%` }}
         />
+        {/* Encumbrance threshold marker */}
+        <div
+          className="absolute top-0 bottom-0 w-px bg-amber-600/60"
+          style={{ left: `${encPct}%` }}
+        />
+      </div>
+      <div className="flex justify-between mt-1">
+        <span className="text-xs text-stone-600">
+          Encumbered if &gt;{encumberedAt} bulk
+        </span>
+        <span className="text-xs text-stone-600">Max {limit}</span>
       </div>
       {isEncumbered && (
-        <p className={`text-xs mt-1.5 ${isOverLimit ? 'text-red-400' : 'text-amber-400'}`}>
-          {isOverLimit ? '⚠ Over bulk limit!' : '⚠ Encumbered (−10 ft Speed, −1 to all checks)'}
+        <p className={`text-xs mt-1 font-medium ${isOverLimit ? 'text-red-400' : 'text-amber-400'}`}>
+          {isOverLimit
+            ? '⚠ Over maximum bulk — cannot carry this much'
+            : '⚠ Encumbered: −10 ft Speed, clumsy 1'}
         </p>
       )}
-      <p className="text-xs text-stone-600 mt-1">Encumbered at {encumberedAt}+ bulk</p>
     </div>
   );
 };
