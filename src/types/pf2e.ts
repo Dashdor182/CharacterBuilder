@@ -102,7 +102,8 @@ export interface PF2eFeat extends FoundryItem {
     description: PF2eDescription;
     prerequisites: { value: { value: string }[] };
     traits: PF2eTraits;
-    featType: { value: FeatType };
+    featType?: { value: FeatType };   // legacy field (older versions)
+    category?: FeatType;              // current field (pf2e 7.x+)
     level: { value: number };
     actionType?: { value: string };
     actions?: { value: number | string | null };
@@ -118,7 +119,8 @@ export interface PF2eClassFeature extends FoundryItem {
   type: 'feat';
   system: {
     description: PF2eDescription;
-    featType: { value: 'classfeature' };
+    featType?: { value: 'classfeature' };
+    category?: string;
     level: { value: number };
     traits: PF2eTraits;
     rules?: unknown[];
