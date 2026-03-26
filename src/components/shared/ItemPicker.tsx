@@ -47,40 +47,38 @@ export const ItemPicker: React.FC<ItemPickerProps> = ({
 
   return (
     <>
-      {/* Trigger button */}
+      {/* Trigger */}
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className={`
-          w-full flex items-center gap-2 px-3 py-2 rounded-lg border text-sm transition-colors text-left
-          ${selected
-            ? 'border-amber-600/60 bg-stone-800/80 text-stone-200 hover:border-amber-500'
-            : 'border-stone-700 bg-stone-900 text-stone-500 hover:border-stone-600 hover:text-stone-400'
-          }
-        `}
+        className={`w-full flex items-center gap-2 px-3 py-2.5 rounded-sm text-sm font-sans transition-colors text-left ${
+          selected
+            ? 'bg-ledger-surface-high text-ledger-text hover:bg-ledger-surface-highest'
+            : 'bg-ledger-surface-lowest text-ledger-text-muted hover:text-ledger-text-dim hover:bg-ledger-surface-low'
+        }`}
       >
+        {selected && <span className="text-ledger-gold text-xs flex-shrink-0">✦</span>}
         <span className="flex-1 truncate font-medium">
           {selected ? selected.name : placeholder}
         </span>
         {selected && selected.subtitle && (
-          <span className="text-xs text-stone-500 flex-shrink-0">{selected.subtitle}</span>
+          <span className="text-xs text-ledger-text-muted flex-shrink-0">{selected.subtitle}</span>
         )}
         {selected && (
           <span
             role="button"
             onClick={e => { e.stopPropagation(); onSelect(null); }}
-            className="text-stone-500 hover:text-red-400 flex-shrink-0 px-0.5 transition-colors"
+            className="text-ledger-text-muted hover:text-ledger-error flex-shrink-0 px-0.5 transition-colors"
             title="Clear selection"
           >
             ×
           </span>
         )}
-        <svg className="w-3.5 h-3.5 text-stone-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+        <svg className="w-3 h-3 text-ledger-text-muted flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
         </svg>
       </button>
 
-      {/* Modal picker */}
       {open && (
         <PickerModal
           items={items}
@@ -119,9 +117,9 @@ export const PickerModal: React.FC<{
       <div className="space-y-3">
         <SearchBar value={search} onChange={setSearch} placeholder={searchPlaceholder ?? 'Search…'} />
 
-        <div className="space-y-1 max-h-[60vh] overflow-y-auto pr-1">
+        <div className="space-y-0.5 max-h-[60vh] overflow-y-auto">
           {filtered.length === 0 ? (
-            <p className="text-stone-600 text-sm py-4 text-center">No results.</p>
+            <p className="text-ledger-text-muted text-sm py-6 text-center font-sans">No results.</p>
           ) : (
             filtered.map(item => {
               const isSelected = item.id === selectedId;
@@ -130,23 +128,23 @@ export const PickerModal: React.FC<{
                 <button
                   onClick={() => onSelect(item.id)}
                   onMouseLeave={item.rawItem ? hideTooltip : undefined}
-                  className={`
-                    w-full text-left px-3 py-2.5 rounded border text-sm transition-all
-                    ${isSelected
-                      ? 'border-amber-500 bg-amber-600/20 text-amber-300'
-                      : 'border-stone-700/50 bg-stone-800/50 text-stone-300 hover:border-amber-600/50 hover:bg-stone-800 hover:text-stone-100'
-                    }
-                  `}
+                  className={`w-full text-left px-4 py-3 rounded-sm text-sm font-sans transition-all ${
+                    isSelected
+                      ? 'bg-ledger-gold/15 text-ledger-gold'
+                      : 'text-ledger-text-dim hover:bg-ledger-surface-highest hover:text-ledger-text'
+                  }`}
+                  style={isSelected ? { boxShadow: 'inset 2px 0 0 #e9c176' } : undefined}
                 >
                   <div className="flex items-center gap-2">
+                    {isSelected && <span className="text-ledger-gold text-xs flex-shrink-0">✦</span>}
                     <span className="font-medium flex-1 truncate">{item.name}</span>
                     {item.tag && (
-                      <span className={`text-xs px-1.5 py-0.5 rounded flex-shrink-0 ${item.tagColor ?? 'bg-stone-700 text-stone-400'}`}>
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded-sm flex-shrink-0 font-semibold tracking-wide ${item.tagColor ?? 'bg-ledger-surface-highest text-ledger-text-muted'}`}>
                         {item.tag}
                       </span>
                     )}
                     {item.subtitle && (
-                      <span className="text-xs text-stone-500 flex-shrink-0">{item.subtitle}</span>
+                      <span className="text-[11px] text-ledger-text-muted flex-shrink-0">{item.subtitle}</span>
                     )}
                   </div>
                 </button>
