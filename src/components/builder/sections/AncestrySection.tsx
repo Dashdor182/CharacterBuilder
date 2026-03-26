@@ -159,7 +159,7 @@ export const AncestrySection: React.FC = () => {
             <div>
               <label className="text-xs text-stone-400 font-medium uppercase tracking-wide">Languages</label>
               <div className="flex flex-wrap gap-1.5 mt-1.5">
-                {selected.system.languages.value.map(lang => (
+                {(selected.system.languages?.value ?? []).map(lang => (
                   <span key={lang} className="px-2 py-0.5 bg-stone-800 rounded text-xs text-stone-300 capitalize">
                     {lang}
                   </span>
@@ -173,7 +173,7 @@ export const AncestrySection: React.FC = () => {
             <div>
               <label className="text-xs text-stone-400 font-medium uppercase tracking-wide">Traits</label>
               <div className="flex flex-wrap gap-1.5 mt-1.5">
-                {selected.system.traits.value.map(t => (
+                {(selected.system.traits?.value ?? []).map(t => (
                   <span key={t} className="px-2 py-0.5 bg-stone-800 border border-stone-700 rounded text-xs text-stone-300 capitalize">
                     {t}
                   </span>

@@ -10,6 +10,7 @@ import { ItemTooltip } from './components/shared/Tooltip';
 import { ShareModal } from './components/shared/ShareModal';
 import { SettingsPanel } from './components/shared/SettingsPanel';
 import { ConfirmModal } from './components/shared/Modal';
+import { ErrorBoundary } from './components/shared/ErrorBoundary';
 
 export default function App() {
   const { gameData, loading, progress, error, loadData } = useDataStore();
@@ -48,6 +49,7 @@ export default function App() {
   }
 
   return (
+    <ErrorBoundary>
     <div className={`min-h-screen ${darkMode ? 'bg-stone-950 text-stone-100' : 'bg-gray-100 text-gray-900'}`}>
       {/* Top Navigation */}
       <TopNav
@@ -108,6 +110,7 @@ export default function App() {
         </div>
       )}
     </div>
+    </ErrorBoundary>
   );
 }
 
