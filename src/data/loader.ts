@@ -141,7 +141,7 @@ async function buildManifest(onProgress: ProgressCallback): Promise<Manifest> {
       done++;
       onProgress({
         stage: `Indexing ${dir.name}… (${done}/${total})`,
-        current: 3 + Math.floor((done / total) * 7),
+        current: 5 + Math.floor((done / total) * 23),
         total: 100,
       });
     })
@@ -171,11 +171,10 @@ async function fetchFile(path: string): Promise<FoundryItem | null> {
 
 async function fetchPack<T extends FoundryItem>(
   paths: string[],
-  onProgress?: (n: number) => void,
+  onProgress?: (delta: number) => void,
   concurrency = 15,
 ): Promise<T[]> {
   const results: T[] = [];
-  let done = 0;
 
   for (let i = 0; i < paths.length; i += concurrency) {
     const batch = paths.slice(i, i + concurrency);
@@ -183,8 +182,8 @@ async function fetchPack<T extends FoundryItem>(
     for (const item of fetched) {
       if (item) results.push(item as T);
     }
-    done += batch.length;
-    onProgress?.(done);
+    // Pass the delta (this batch size), not the cumulative total
+    onProgress?.(batch.length);
     if (i + concurrency < paths.length) {
       await new Promise(r => setTimeout(r, 20));
     }
@@ -236,8 +235,9 @@ export async function loadGameData(
   // 4. Fetch all pack files from raw.githubusercontent.com
   const totalFiles = Object.values(p).reduce((s, a) => s + a.length, 0) || 1;
   let loaded = 0;
-  const BASE = 12;
-  const RANGE = 83;
+  // Manifest fetch (slow API calls) occupies 0–30%, file downloads 30–95%
+  const BASE = 30;
+  const RANGE = 65;
 
   const tick = (packName: string, n: number) => {
     loaded += n;
