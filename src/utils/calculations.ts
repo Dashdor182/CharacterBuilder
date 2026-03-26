@@ -170,10 +170,12 @@ export function computeStats(
   const weaponProficiencies = computeWeaponProficiencies(cls, level);
   const armorProficiencies = computeArmorProficiencies(cls, level);
 
-  // Bulk
+  // Bulk — PF2e rules:
+  //   Encumbered when bulk > 5 + Str modifier
+  //   Cannot carry more than 10 + Str modifier
   const { total: totalBulk } = computeBulk(character, gameData);
-  const bulkLimit = 5 + modifiers.str;
-  const encumberedAt = bulkLimit - 5; // actually encumbered when over (limit - 5)
+  const encumberedAt = 5 + modifiers.str;   // encumbered if bulk exceeds this
+  const bulkLimit    = 10 + modifiers.str;  // hard cap, cannot carry more
 
   return {
     abilities: abilityScoresRaw,
@@ -323,10 +325,17 @@ function computeArmorProficiencies(cls: PF2eClass | undefined, _level: number): 
   return profs;
 }
 
-export function computeBulk(character: CharacterState, gameData: GameData): { total: number; limit: number } {
-  let total = 0;
+export function computeBulk(
+  character: CharacterState,
+  gameData: GameData,
+): { total: number; lightRemainder: number } {
+  let heavyBulk = 0;
+  let lightCount = 0;
 
   for (const entry of character.equipment) {
+    // Dropped items are not being carried — don't count
+    if (entry.carryType === 'dropped') continue;
+
     const item =
       gameData.armor.find(a => a._id === entry.itemId) ??
       gameData.weapons.find(w => w._id === entry.itemId) ??
@@ -335,17 +344,26 @@ export function computeBulk(character: CharacterState, gameData: GameData): { to
     if (!item) continue;
 
     const rawBulk = item.system.bulk?.value ?? 0;
-    let bulk = typeof rawBulk === 'string' ? (rawBulk === 'L' ? 0.1 : 0) : rawBulk;
 
-    // Stowed items count at full bulk; worn items at their bulk value
-    if (entry.carryType === 'stowed') {
-      bulk = bulk; // full bulk
+    if (rawBulk === 'L' || rawBulk === 0.1) {
+      // Light (L): 10 light items = 1 Bulk, round down
+      lightCount += entry.quantity;
+    } else {
+      const b = typeof rawBulk === 'number' ? rawBulk : (parseFloat(String(rawBulk)) || 0);
+      heavyBulk += b * entry.quantity;
     }
-
-    total += bulk * entry.quantity;
+    // Negligible (0 / '—') contributes nothing
   }
 
-  return { total: Math.round(total * 10) / 10, limit: 99 };
+  // Currency: every 1000 coins (any denomination) = 1 Bulk
+  const totalCoins = character.currency.pp + character.currency.gp
+                   + character.currency.sp + character.currency.cp;
+  const bulkFromCurrency = Math.floor(totalCoins / 1000);
+
+  const bulkFromLight = Math.floor(lightCount / 10);
+  const total = heavyBulk + bulkFromLight + bulkFromCurrency;
+
+  return { total, lightRemainder: lightCount % 10 };
 }
 
 export function formatModifier(mod: number): string {
