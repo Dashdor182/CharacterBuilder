@@ -83,14 +83,19 @@ export const LevelSection: React.FC<{ level: number }> = ({ level }) => {
   const pendingBoosts  = boostKey ? Math.max(0, 4 - boostCount) : 0;
   const totalPending   = pendingFeats + pendingBoosts;
 
+  // Determine colour theme for this level's row
+  const rowTheme = !hasAnyContent
+    ? { border: 'border-stone-800/30', bg: '', hover: 'hover:bg-stone-800/10' }
+    : totalPending > 0
+      ? { border: 'border-amber-900/40', bg: open ? 'bg-amber-950/20' : 'bg-amber-950/10', hover: 'hover:bg-amber-950/25' }
+      : { border: 'border-green-900/30', bg: open ? 'bg-green-950/20' : 'bg-green-950/10', hover: 'hover:bg-green-950/25' };
+
   return (
-    <div className={`rounded-lg border transition-colors ${
-      open ? 'border-stone-700/60' : 'border-stone-800/40'
-    }`}>
+    <div className={`rounded-lg border transition-colors ${rowTheme.border} ${rowTheme.bg}`}>
       {/* Header row */}
       <button
         onClick={() => setOpen(o => !o)}
-        className="w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-stone-800/20 rounded-lg transition-colors"
+        className={`w-full flex items-center gap-3 px-4 py-2.5 text-left rounded-lg transition-colors ${rowTheme.hover}`}
       >
         {/* Level label */}
         <span className="text-xs font-bold text-stone-500 w-14 flex-shrink-0 uppercase tracking-wide">
