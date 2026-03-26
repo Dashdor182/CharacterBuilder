@@ -26,7 +26,9 @@ interface CharacterStore {
   >>) => void;
 
   // Core choices
-  setAncestry: (id: string | null) => void;
+  setAncestry: (id: string | null, fixedBoosts?: Partial<Record<Ability, boolean>>, fixedFlaws?: Partial<Record<Ability, boolean>>) => void;
+  selectAncestryFreeBoost: (ability: Ability | null) => void;
+  selectAncestryFreeFlaw: (ability: Ability | null) => void;
   setHeritage: (id: string | null) => void;
   setBackground: (id: string | null) => void;
   setClass: (id: string | null, clearDependents?: boolean) => void;
@@ -116,17 +118,44 @@ export const useCharacterStore = create<CharacterStore>()(
       }));
     },
 
-    setAncestry: (id) => {
+    setAncestry: (id, fixedBoosts = {}, fixedFlaws = {}) => {
       set(state => ({
         character: {
           ...state.character,
           ancestryId: id,
           heritageId: null,
-          // Reset ancestry boosts/flaws when ancestry changes
           abilityBoosts: {
             ...state.character.abilityBoosts,
-            ancestry: {},
-            ancestryFlaw: {},
+            ancestryFixed: id ? fixedBoosts : {},
+            ancestryFlawFixed: id ? fixedFlaws : {},
+            ancestry: {},       // reset free boost selection
+            ancestryFlaw: {},   // reset free flaw selection
+          },
+          updatedAt: Date.now(),
+        },
+      }));
+    },
+
+    selectAncestryFreeBoost: (ability) => {
+      set(state => ({
+        character: {
+          ...state.character,
+          abilityBoosts: {
+            ...state.character.abilityBoosts,
+            ancestry: ability ? { [ability]: true } : {},
+          },
+          updatedAt: Date.now(),
+        },
+      }));
+    },
+
+    selectAncestryFreeFlaw: (ability) => {
+      set(state => ({
+        character: {
+          ...state.character,
+          abilityBoosts: {
+            ...state.character.abilityBoosts,
+            ancestryFlaw: ability ? { [ability]: true } : {},
           },
           updatedAt: Date.now(),
         },

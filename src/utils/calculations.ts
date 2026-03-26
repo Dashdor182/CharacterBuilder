@@ -67,6 +67,7 @@ export function computeAbilityScores(
 
   // Apply all boost sources
   const allBoostSources = [
+    boosts.ancestryFixed ?? {},
     boosts.ancestry,
     boosts.background,
     boosts.class,
@@ -79,7 +80,10 @@ export function computeAbilityScores(
     }
   }
 
-  // Apply flaws first (before higher-level boosts so flaws reduce the base)
+  // Apply flaws (fixed auto-applied + user free choices)
+  for (const [ability, active] of Object.entries(boosts.ancestryFlawFixed ?? {})) {
+    if (active) scores[ability as Ability] -= 2;
+  }
   for (const [ability, active] of Object.entries(boosts.ancestryFlaw)) {
     if (active) scores[ability as Ability] -= 2;
   }

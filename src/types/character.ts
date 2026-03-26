@@ -2,7 +2,10 @@ import type { Ability, ProficiencyRank } from './pf2e';
 
 // ——— Ability Score Boosts ———
 export interface AbilityBoostState {
-  ancestry: Partial<Record<Ability, boolean>>;    // from ancestry (limited choices)
+  ancestryFixed: Partial<Record<Ability, boolean>>; // auto-applied fixed boosts from ancestry
+  ancestryFlawFixed: Partial<Record<Ability, boolean>>; // auto-applied fixed flaws from ancestry
+  ancestry: Partial<Record<Ability, boolean>>;    // user's free boost choices from ancestry
+  ancestryFlaw: Partial<Record<Ability, boolean>>; // user's free flaw choices from ancestry
   background: Partial<Record<Ability, boolean>>;  // from background
   class: Partial<Record<Ability, boolean>>;       // from class key ability
   level1: Partial<Record<Ability, boolean>>;      // 4 free boosts at level 1
@@ -10,7 +13,6 @@ export interface AbilityBoostState {
   level10: Partial<Record<Ability, boolean>>;     // 4 free boosts at level 10
   level15: Partial<Record<Ability, boolean>>;     // 4 free boosts at level 15
   level20: Partial<Record<Ability, boolean>>;     // 4 free boosts at level 20
-  ancestryFlaw: Partial<Record<Ability, boolean>>; // from ancestry flaws
 }
 
 // ——— Skill Proficiencies ———
@@ -205,7 +207,10 @@ export const EMPTY_CHARACTER: CharacterState = {
   classId: null,
   keyAbility: null,
   abilityBoosts: {
+    ancestryFixed: {},
+    ancestryFlawFixed: {},
     ancestry: {},
+    ancestryFlaw: {},
     background: {},
     class: {},
     level1: {},
@@ -213,7 +218,6 @@ export const EMPTY_CHARACTER: CharacterState = {
     level10: {},
     level15: {},
     level20: {},
-    ancestryFlaw: {},
   },
   skillProficiencies: {},
   loreSkills: [],

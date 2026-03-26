@@ -35,7 +35,13 @@ export const ItemPicker: React.FC<ItemPickerProps> = ({
   const selected = items.find(i => i.id === selectedId) ?? null;
 
   const handleSelect = (id: string) => {
+    hideTooltip();
     onSelect(id === selectedId ? null : id);
+    setOpen(false);
+  };
+
+  const handleClose = () => {
+    hideTooltip();
     setOpen(false);
   };
 
@@ -82,7 +88,7 @@ export const ItemPicker: React.FC<ItemPickerProps> = ({
           title={modalTitle ?? placeholder}
           searchPlaceholder={searchPlaceholder}
           onSelect={handleSelect}
-          onClose={() => setOpen(false)}
+          onClose={handleClose}
           showTooltip={showTooltip}
           hideTooltip={hideTooltip}
         />
