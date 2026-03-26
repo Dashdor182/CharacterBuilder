@@ -1,10 +1,15 @@
 /**
  * Data Loader
  *
- * Fetches PF2e game data from jsDelivr CDN (mirrors Foundry VTT PF2e GitHub).
- * Path discovery uses jsDelivr's flat listing API — no GitHub API rate limits.
- * File content fetched via jsDelivr CDN.
- * Data is cached in localStorage with 24hr TTL.
+ * Fetches PF2e game data from GitHub (Foundry VTT PF2e repository).
+ *
+ * Path discovery strategy:
+ *   1. GET /contents/packs/pf2e?ref={tag}  → 1 API call, returns tree SHAs for subdirectories
+ *   2. GET /git/trees/{sha} for each pack   → 9 API calls, returns all files (no pagination limit)
+ *   Total: 10 GitHub API calls, cached 24 hours in localStorage → 0 calls on subsequent loads
+ *
+ * File content: fetched from raw.githubusercontent.com (separate CDN rate limit)
+ * Data: cached in localStorage with 24hr TTL
  */
 
 import type {
@@ -21,15 +26,13 @@ import type {
   FoundryItem,
 } from '../types/pf2e';
 
-// Pinned to a known stable PF2e system release
 const PF2E_TAG = 'pf2e-7.11.3';
-const JSDELIVR = `https://cdn.jsdelivr.net/gh/foundryvtt/pf2e@${PF2E_TAG}`;
-// jsDelivr's own package file listing — no GitHub API rate limits
-const JSDELIVR_FLAT = `https://data.jsdelivr.com/v1/packages/gh/foundryvtt/pf2e@${PF2E_TAG}/flat`;
+const GITHUB_API = 'https://api.github.com/repos/foundryvtt/pf2e';
+const RAW_CDN = `https://raw.githubusercontent.com/foundryvtt/pf2e/${PF2E_TAG}`;
 
-const LS_MANIFEST_KEY = 'pf2e_manifest_v3';
-const LS_DATA_KEY = 'pf2e_gamedata_v3';
-const CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours
+const LS_MANIFEST_KEY = 'pf2e_manifest_v4';
+const LS_DATA_KEY = 'pf2e_gamedata_v4';
+const CACHE_TTL = 24 * 60 * 60 * 1000;
 
 export type LoadProgress = {
   stage: string;
@@ -39,8 +42,8 @@ export type LoadProgress = {
 
 type ProgressCallback = (p: LoadProgress) => void;
 
-// Pack directories to load (under packs/pf2e/ in the repo)
-const PACK_NAMES = [
+// The pack directory names under packs/pf2e/ that we care about
+const WANTED_PACKS = new Set([
   'ancestries',
   'ancestry-features',
   'heritages',
@@ -49,19 +52,16 @@ const PACK_NAMES = [
   'class-features',
   'feats',
   'spells',
-  'equipment', // includes armor, weapons, and general equipment
-] as const;
+  'equipment',
+]);
 
-const RELEVANT_PACK_DIRS = new Set(
-  PACK_NAMES.map(p => `packs/pf2e/${p}`)
-);
-
-// ——— Manifest (file path index) ———
+// ——— Manifest ———
 
 interface Manifest {
   fetchedAt: number;
   tag: string;
-  packs: Record<string, string[]>; // pack short name → array of file paths
+  // pack short name → array of full repo-relative paths (e.g. "packs/pf2e/feats/fighter.json")
+  packs: Record<string, string[]>;
 }
 
 function getCachedManifest(): Manifest | null {
@@ -71,65 +71,85 @@ function getCachedManifest(): Manifest | null {
     const m = JSON.parse(raw) as Manifest;
     if (Date.now() - m.fetchedAt > CACHE_TTL) return null;
     if (m.tag !== PF2E_TAG) return null;
-    // Verify manifest has actual data
-    const totalFiles = Object.values(m.packs).reduce((s, a) => s + a.length, 0);
-    if (totalFiles === 0) return null;
+    const total = Object.values(m.packs).reduce((s, a) => s + a.length, 0);
+    if (total === 0) return null;
     return m;
   } catch { return null; }
 }
 
-async function fetchManifest(onProgress?: ProgressCallback): Promise<Manifest> {
-  onProgress?.({ stage: 'Downloading file index…', current: 3, total: 100 });
-
-  const res = await fetch(JSDELIVR_FLAT);
+async function githubGet<T>(url: string): Promise<T> {
+  const res = await fetch(url, {
+    headers: { 'Accept': 'application/vnd.github.v3+json' },
+  });
   if (!res.ok) {
+    const body = await res.text().catch(() => '');
+    if (res.status === 403 || res.status === 429) {
+      const reset = res.headers.get('X-RateLimit-Reset');
+      const resetTime = reset
+        ? ` Rate limit resets at ${new Date(Number(reset) * 1000).toLocaleTimeString()}.`
+        : '';
+      throw new Error(
+        `GitHub API rate limit exceeded.${resetTime} ` +
+        'Please wait an hour and try again, or run "npm run fetch-data" locally to pre-bundle game data.'
+      );
+    }
+    throw new Error(`GitHub API error ${res.status}: ${body.slice(0, 100)}`);
+  }
+  return res.json() as Promise<T>;
+}
+
+async function buildManifest(onProgress: ProgressCallback): Promise<Manifest> {
+  onProgress({ stage: 'Fetching pack directory listing…', current: 3, total: 100 });
+
+  // Step 1: list packs/pf2e/ to get tree SHA for each subdirectory (1 API call)
+  type ContentItem = { type: string; name: string; sha: string; path: string };
+  const packsDirItems = await githubGet<ContentItem[]>(
+    `${GITHUB_API}/contents/packs/pf2e?ref=${PF2E_TAG}`
+  );
+
+  // Filter to only the packs we care about
+  const relevantDirs = packsDirItems.filter(
+    item => item.type === 'dir' && WANTED_PACKS.has(item.name)
+  );
+
+  if (relevantDirs.length === 0) {
     throw new Error(
-      `Failed to fetch file index (HTTP ${res.status}). ` +
-      'Check your internet connection and try again.'
+      `No expected pack directories found in packs/pf2e/ for tag "${PF2E_TAG}". ` +
+      'The repository structure may have changed.'
     );
   }
-
-  const data = await res.json() as { files: Array<{ name: string }> };
-
-  if (!data.files || !Array.isArray(data.files)) {
-    throw new Error('Unexpected response from jsDelivr file listing API');
-  }
-
-  onProgress?.({ stage: 'Indexing pack files…', current: 8, total: 100 });
 
   const packs: Record<string, string[]> = {};
-  for (const packName of PACK_NAMES) {
-    packs[packName] = [];
-  }
+  const total = relevantDirs.length;
+  let done = 0;
 
-  for (const file of data.files) {
-    // jsDelivr names start with '/', e.g. "/packs/pf2e/ancestries/human.json"
-    const normalized = file.name.startsWith('/') ? file.name.slice(1) : file.name;
+  // Step 2: for each pack dir, fetch its git tree (no pagination limits) — 9 API calls
+  await Promise.all(
+    relevantDirs.map(async dir => {
+      type TreeItem = { type: string; path: string };
+      type TreeResponse = { tree: TreeItem[]; truncated?: boolean };
 
-    if (!normalized.endsWith('.json')) continue;
+      const treeRes = await githubGet<TreeResponse>(
+        `${GITHUB_API}/git/trees/${dir.sha}`
+      );
 
-    // Skip metadata files like _folders.json
-    const basename = normalized.split('/').pop() ?? '';
-    if (basename.startsWith('_')) continue;
+      const files = treeRes.tree
+        .filter(item => item.type === 'blob' && item.path.endsWith('.json') && !item.path.startsWith('_'))
+        .map(item => `packs/pf2e/${dir.name}/${item.path}`);
 
-    // Match format: packs/pf2e/{pack}/{file}.json (no deeper nesting)
-    const parts = normalized.split('/');
-    if (parts.length !== 4) continue; // must be exactly packs/pf2e/{pack}/{file}
+      packs[dir.name] = files;
+      done++;
+      onProgress({
+        stage: `Indexing ${dir.name}… (${done}/${total})`,
+        current: 3 + Math.floor((done / total) * 7),
+        total: 100,
+      });
+    })
+  );
 
-    const packDir = `${parts[0]}/${parts[1]}/${parts[2]}`; // packs/pf2e/{pack}
-    if (!RELEVANT_PACK_DIRS.has(packDir)) continue;
-
-    const packName = parts[2] as string; // e.g. 'ancestries', 'class-features'
-    if (!packs[packName]) packs[packName] = [];
-    packs[packName].push(normalized);
-  }
-
-  const totalFound = Object.values(packs).reduce((s, a) => s + a.length, 0);
-  if (totalFound === 0) {
-    throw new Error(
-      `No pack files found in jsDelivr listing for tag "${PF2E_TAG}". ` +
-      'The tag or directory structure may have changed.'
-    );
+  const totalFiles = Object.values(packs).reduce((s, a) => s + a.length, 0);
+  if (totalFiles === 0) {
+    throw new Error('No game data files found. The repository structure may have changed.');
   }
 
   const manifest: Manifest = { fetchedAt: Date.now(), tag: PF2E_TAG, packs };
@@ -137,11 +157,11 @@ async function fetchManifest(onProgress?: ProgressCallback): Promise<Manifest> {
   return manifest;
 }
 
-// ——— File fetching via jsDelivr CDN ———
+// ——— File fetching via raw.githubusercontent.com ———
 
 async function fetchFile(path: string): Promise<FoundryItem | null> {
   try {
-    const res = await fetch(`${JSDELIVR}/${path}`);
+    const res = await fetch(`${RAW_CDN}/${path}`);
     if (!res.ok) return null;
     return await res.json() as FoundryItem;
   } catch {
@@ -151,8 +171,8 @@ async function fetchFile(path: string): Promise<FoundryItem | null> {
 
 async function fetchPack<T extends FoundryItem>(
   paths: string[],
-  onProgress?: (n: number, total: number) => void,
-  concurrency = 12,
+  onProgress?: (n: number) => void,
+  concurrency = 15,
 ): Promise<T[]> {
   const results: T[] = [];
   let done = 0;
@@ -164,7 +184,7 @@ async function fetchPack<T extends FoundryItem>(
       if (item) results.push(item as T);
     }
     done += batch.length;
-    onProgress?.(done, paths.length);
+    onProgress?.(done);
     if (i + concurrency < paths.length) {
       await new Promise(r => setTimeout(r, 20));
     }
@@ -179,11 +199,14 @@ export async function loadGameData(
   onProgress?: ProgressCallback,
   forceRefresh = false,
 ): Promise<GameData> {
+  const report = (stage: string, current: number) =>
+    onProgress?.({ stage, current, total: 100 });
+
   // 1. Check localStorage cache
   if (!forceRefresh) {
     const cached = loadFromCache();
     if (cached) {
-      onProgress?.({ stage: 'Loaded from cache', current: 100, total: 100 });
+      report('Loaded from cache', 100);
       return cached;
     }
   }
@@ -191,102 +214,70 @@ export async function loadGameData(
   // 2. Try pre-bundled public/data/pf2e-data.json
   if (!forceRefresh) {
     try {
-      onProgress?.({ stage: 'Checking for bundled data…', current: 2, total: 100 });
+      report('Checking for bundled data…', 2);
       const res = await fetch('/data/pf2e-data.json');
       if (res.ok) {
         const data = await res.json() as GameData;
         data.loadedAt = Date.now();
         saveToCache(data);
-        onProgress?.({ stage: 'Ready!', current: 100, total: 100 });
+        report('Ready!', 100);
         return data;
       }
     } catch { /* not available */ }
   }
 
-  // 3. Get file manifest via jsDelivr listing API (no GitHub rate limits)
-  let manifest: Manifest;
-  if (!forceRefresh) {
-    const cached = getCachedManifest();
-    manifest = cached ?? await fetchManifest(onProgress);
-  } else {
-    manifest = await fetchManifest(onProgress);
-  }
+  // 3. Build manifest from GitHub API (10 total API calls, cached 24h)
+  const manifest = forceRefresh || !getCachedManifest()
+    ? await buildManifest(onProgress ?? (() => { }))
+    : getCachedManifest()!;
 
-  // 4. Fetch all packs from jsDelivr CDN
-  const packs = manifest.packs;
+  const p = manifest.packs;
 
-  type PackEntry = [keyof typeof packs, string[]];
-  const packList: PackEntry[] = [
-    ['ancestries', packs['ancestries'] ?? []],
-    ['heritages', packs['heritages'] ?? []],
-    ['ancestry-features', packs['ancestry-features'] ?? []],
-    ['backgrounds', packs['backgrounds'] ?? []],
-    ['classes', packs['classes'] ?? []],
-    ['class-features', packs['class-features'] ?? []],
-    ['feats', packs['feats'] ?? []],
-    ['spells', packs['spells'] ?? []],
-    ['equipment', packs['equipment'] ?? []],
-  ];
+  // 4. Fetch all pack files from raw.githubusercontent.com
+  const totalFiles = Object.values(p).reduce((s, a) => s + a.length, 0) || 1;
+  let loaded = 0;
+  const BASE = 12;
+  const RANGE = 83;
 
-  const totalFiles = packList.reduce((s, [, paths]) => s + paths.length, 0) || 1;
-  let filesLoaded = 0;
-  const baseProgress = 10;
-  const progressRange = 85;
-
-  const report = (stage: string, n: number) => {
-    filesLoaded += n;
-    onProgress?.({
-      stage,
-      current: baseProgress + Math.floor((filesLoaded / totalFiles) * progressRange),
-      total: 100,
-    });
+  const tick = (packName: string, n: number) => {
+    loaded += n;
+    report(`Loading ${packName}…`, BASE + Math.floor((loaded / totalFiles) * RANGE));
   };
 
-  // Fetch packs in parallel groups
   const [
     ancestriesRaw, heritagesRaw, ancestryFeaturesRaw, backgroundsRaw,
-    classesRaw, classFeaturesRaw, featsRaw,
-    spellsRaw, equipmentRaw,
+    classesRaw, classFeaturesRaw, featsRaw, spellsRaw, equipmentRaw,
   ] = await Promise.all([
-    fetchPack(packList[0][1], n => report('Loading ancestries…', n)),
-    fetchPack(packList[1][1], n => report('Loading heritages…', n)),
-    fetchPack(packList[2][1], n => report('Loading ancestry features…', n)),
-    fetchPack(packList[3][1], n => report('Loading backgrounds…', n)),
-    fetchPack(packList[4][1], n => report('Loading classes…', n)),
-    fetchPack(packList[5][1], n => report('Loading class features…', n)),
-    fetchPack(packList[6][1], n => report('Loading feats…', n)),
-    fetchPack(packList[7][1], n => report('Loading spells…', n)),
-    fetchPack(packList[8][1], n => report('Loading equipment…', n)),
+    fetchPack(p['ancestries'] ?? [],        n => tick('ancestries', n)),
+    fetchPack(p['heritages'] ?? [],         n => tick('heritages', n)),
+    fetchPack(p['ancestry-features'] ?? [], n => tick('ancestry features', n)),
+    fetchPack(p['backgrounds'] ?? [],       n => tick('backgrounds', n)),
+    fetchPack(p['classes'] ?? [],           n => tick('classes', n)),
+    fetchPack(p['class-features'] ?? [],    n => tick('class features', n)),
+    fetchPack(p['feats'] ?? [],             n => tick('feats', n)),
+    fetchPack(p['spells'] ?? [],            n => tick('spells', n)),
+    fetchPack(p['equipment'] ?? [],         n => tick('equipment', n)),
   ]);
 
-  onProgress?.({ stage: 'Building indexes…', current: 96, total: 100 });
+  report('Building indexes…', 96);
 
-  // Equipment pack contains all item types (armor, weapons, gear, etc.)
   const gameData: GameData = {
-    ancestries: ancestriesRaw.filter(i => i.type === 'ancestry') as PF2eAncestry[],
-    backgrounds: backgroundsRaw.filter(i => i.type === 'background') as PF2eBackground[],
-    classes: classesRaw.filter(i => i.type === 'class') as PF2eClass[],
-    classFeatures: [
-      ...classFeaturesRaw,
-      ...heritagesRaw,
-    ].filter(i => i.type === 'feat') as PF2eClassFeature[],
-    ancestryFeatures: [
-      ...ancestryFeaturesRaw,
-      ...heritagesRaw,
-    ].filter(i => i.type === 'feat') as PF2eFeat[],
-    feats: featsRaw.filter(i => i.type === 'feat') as PF2eFeat[],
-    spells: spellsRaw.filter(i => i.type === 'spell') as PF2eSpell[],
-    armor: equipmentRaw.filter(i => i.type === 'armor') as PF2eArmor[],
-    weapons: equipmentRaw.filter(i => i.type === 'weapon') as PF2eWeapon[],
-    equipment: equipmentRaw.filter(
-      i => i.type !== 'armor' && i.type !== 'weapon'
-    ) as PF2eEquipment[],
-    loadedAt: Date.now(),
-    version: PF2E_TAG,
+    ancestries:      ancestriesRaw.filter(i => i.type === 'ancestry') as PF2eAncestry[],
+    backgrounds:     backgroundsRaw.filter(i => i.type === 'background') as PF2eBackground[],
+    classes:         classesRaw.filter(i => i.type === 'class') as PF2eClass[],
+    classFeatures:   [...classFeaturesRaw, ...heritagesRaw].filter(i => i.type === 'feat') as PF2eClassFeature[],
+    ancestryFeatures:[...ancestryFeaturesRaw, ...heritagesRaw].filter(i => i.type === 'feat') as PF2eFeat[],
+    feats:           featsRaw.filter(i => i.type === 'feat') as PF2eFeat[],
+    spells:          spellsRaw.filter(i => i.type === 'spell') as PF2eSpell[],
+    armor:           equipmentRaw.filter(i => i.type === 'armor') as PF2eArmor[],
+    weapons:         equipmentRaw.filter(i => i.type === 'weapon') as PF2eWeapon[],
+    equipment:       equipmentRaw.filter(i => i.type !== 'armor' && i.type !== 'weapon') as PF2eEquipment[],
+    loadedAt:        Date.now(),
+    version:         PF2E_TAG,
   };
 
   saveToCache(gameData);
-  onProgress?.({ stage: 'Ready!', current: 100, total: 100 });
+  report('Ready!', 100);
   return gameData;
 }
 
@@ -310,9 +301,10 @@ export function loadFromCache(): GameData | null {
 export function clearCache(): void {
   localStorage.removeItem(LS_DATA_KEY);
   localStorage.removeItem(LS_MANIFEST_KEY);
-  // Clear legacy keys too
-  localStorage.removeItem('pf2e_gamedata_v2');
-  localStorage.removeItem('pf2e_manifest_v2');
+  // Clear legacy cache keys
+  for (const key of ['pf2e_gamedata_v2', 'pf2e_gamedata_v3', 'pf2e_manifest_v2', 'pf2e_manifest_v3']) {
+    localStorage.removeItem(key);
+  }
 }
 
 export function getCacheInfo(): { age: number | null; itemCount: number | null } {
