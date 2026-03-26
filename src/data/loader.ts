@@ -28,7 +28,8 @@ import type {
 
 const PF2E_TAG = 'pf2e-7.11.3';
 const GITHUB_API = 'https://api.github.com/repos/foundryvtt/pf2e';
-const RAW_CDN = `https://raw.githubusercontent.com/foundryvtt/pf2e/${PF2E_TAG}`;
+// jsDelivr mirrors GitHub with no rate limits; raw.githubusercontent.com throttles large packs
+const RAW_CDN = `https://cdn.jsdelivr.net/gh/foundryvtt/pf2e@${PF2E_TAG}`;
 
 export type LoadProgress = {
   stage: string;
@@ -180,7 +181,7 @@ async function fetchFile(path: string): Promise<FoundryItem | null> {
 }
 
 /**
- * Fetches a pack from IDB cache, falling back to raw.githubusercontent.com.
+ * Fetches a pack from IDB cache, falling back to jsDelivr CDN.
  * Cached packs are stored indefinitely (tag-versioned key, no TTL).
  */
 async function fetchPackCached<T extends FoundryItem>(
