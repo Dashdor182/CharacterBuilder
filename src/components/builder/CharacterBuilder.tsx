@@ -16,26 +16,22 @@ export const CharacterBuilder: React.FC = () => {
   const spellCount = character.spellcasting.reduce((n, e) => n + e.knownSpells.length, 0);
 
   return (
-    <div>
-      {/* Sticky identity + core selections header */}
+    <div className="bg-ledger-bg min-h-screen">
       <HeaderBar />
 
-      {/* Scrollable content */}
-      <div className="max-w-4xl mx-auto px-4 py-4">
-
+      <div className="max-w-4xl mx-auto px-4 py-6">
         {/* Level sections 1–20 */}
-        <div className="space-y-1.5 mb-6">
+        <div className="space-y-1 mb-8">
           {LEVELS.map(level => (
             <LevelSection key={level} level={level} />
           ))}
         </div>
 
-        {/* Spells & Equipment below the level plan */}
-        <div className="border-t border-stone-800/60 pt-4 space-y-2">
+        {/* Spells & Equipment */}
+        <div className="space-y-1 pt-2">
           <Collapsible
             id="spells"
             title="Spells"
-            icon="✨"
             badge={spellCount || undefined}
             collapsed={collapsedSections.has('spells')}
             onToggle={() => toggleSection('spells')}
@@ -46,7 +42,6 @@ export const CharacterBuilder: React.FC = () => {
           <Collapsible
             id="equipment"
             title="Equipment"
-            icon="🎒"
             badge={character.equipment.length || undefined}
             collapsed={collapsedSections.has('equipment')}
             onToggle={() => toggleSection('equipment')}
