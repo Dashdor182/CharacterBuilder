@@ -192,8 +192,8 @@ const AncestryBoosts: React.FC<{
   character: { abilityBoosts: { ancestry: Record<string, boolean>; ancestryFlaw: Record<string, boolean> } };
   onToggle: (source: 'ancestry' | 'ancestryFlaw', ability: Ability) => void;
 }> = ({ ancestry, character, onToggle }) => {
-  const boostGroups = ancestry.system.boosts ?? [];
-  const flawGroups = ancestry.system.flaws ?? [];
+  const boostGroups = Object.values(ancestry.system.boosts ?? {});
+  const flawGroups = Object.values(ancestry.system.flaws ?? {});
 
   return (
     <div className="space-y-3">

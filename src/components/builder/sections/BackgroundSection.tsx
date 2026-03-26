@@ -71,13 +71,13 @@ export const BackgroundSection: React.FC = () => {
           <h3 className="text-amber-400 font-semibold">{selected.name}</h3>
 
           {/* Ability boosts */}
-          {(selected.system.boosts ?? []).length > 0 && (
+          {Object.values(selected.system.boosts ?? {}).length > 0 && (
             <div>
               <label className="text-xs text-stone-400 font-medium uppercase tracking-wide mb-2 block">
                 Background Ability Boosts
               </label>
               <div className="space-y-2">
-                {(selected.system.boosts ?? []).map((group, i) => {
+                {Object.values(selected.system.boosts ?? {}).map((group, i) => {
                   const options = group.value ?? [];
                   const isFree = options.length === 0 || options.includes('anything' as Ability);
                   const abilities: Ability[] = isFree

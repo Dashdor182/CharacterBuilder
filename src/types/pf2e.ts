@@ -32,8 +32,8 @@ export interface PF2eAncestry extends FoundryItem {
     hp: number;
     size: Size;
     speed: number;
-    boosts: { value: Ability[] }[];
-    flaws: { value: Ability[] }[];
+    boosts: Record<string, { value: Ability[] }>;
+    flaws: Record<string, { value: Ability[] }>;
     languages: { value: string[]; custom?: string };
     additionalLanguages?: { count: number; value: string[] };
     traits: PF2eTraits;
@@ -46,7 +46,7 @@ export interface PF2eBackground extends FoundryItem {
   type: 'background';
   system: {
     description: PF2eDescription;
-    boosts: { value: Ability[] }[];
+    boosts: Record<string, { value: Ability[] }>;
     trainedSkills: { value: string[]; additional?: { value: string[] } };
     trainedLore?: string;
     feats?: { value: string }[];
