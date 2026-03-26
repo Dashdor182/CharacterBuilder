@@ -5,8 +5,10 @@ import { ItemPicker } from '../../shared/ItemPicker';
 import { ABILITY_SHORT } from '../../../utils/calculations';
 import type { Ability } from '../../../types/pf2e';
 
+const ALL_ABILITIES: Ability[] = ['str', 'dex', 'con', 'int', 'wis', 'cha'];
+
 export const BackgroundSection: React.FC = () => {
-  const { character, setBackground, toggleAbilityBoost, setBackgroundSkill } = useCharacterStore();
+  const { character, setBackground, setBackgroundBoostGroup, setBackgroundSkill } = useCharacterStore();
   const { gameData } = useDataStore();
 
   const backgroundItems = useMemo(() => {
@@ -25,6 +27,8 @@ export const BackgroundSection: React.FC = () => {
   }, [gameData]);
 
   const selected = gameData?.backgrounds.find(b => b._id === character.backgroundId) ?? null;
+  const boostGroups = selected ? Object.values(selected.system.boosts ?? {}) : [];
+  const boostSelections = character.backgroundBoostGroups ?? [];
 
   if (!gameData) return <p className="text-stone-500 text-sm">Loading data…</p>;
 
@@ -43,32 +47,45 @@ export const BackgroundSection: React.FC = () => {
         <div className="space-y-4 border-t border-stone-700/50 pt-4">
           <h3 className="text-amber-400 font-semibold">{selected.name}</h3>
 
-          {/* Ability boosts */}
-          {Object.values(selected.system.boosts ?? {}).length > 0 && (
-            <div>
-              <label className="text-xs text-stone-400 font-medium uppercase tracking-wide mb-2 block">
-                Background Ability Boosts
-              </label>
-              <div className="space-y-2">
-                {Object.values(selected.system.boosts ?? {}).map((group, i) => {
-                  const options = group.value ?? [];
-                  const isFree = options.length === 0 || options.includes('anything' as Ability);
-                  const abilities: Ability[] = isFree
-                    ? ['str', 'dex', 'con', 'int', 'wis', 'cha']
-                    : (options as Ability[]);
+          {/* Ability boosts — one selection per group */}
+          {boostGroups.length > 0 && (
+            <div className="space-y-3">
+              {boostGroups.map((group, groupIndex) => {
+                const options = (group.value ?? []) as Ability[];
+                const isFree = options.length === 0 || options.includes('anything' as Ability) || options.length >= 6;
+                const abilities: Ability[] = isFree ? ALL_ABILITIES : options;
 
-                  return (
-                    <div key={i} className="flex flex-wrap gap-1.5">
+                const currentSelection = boostSelections[groupIndex] ?? null;
+                // Other groups' selections that should be disabled (can't boost same ability twice)
+                const otherSelections = new Set(
+                  boostSelections.filter((ab, i) => i !== groupIndex && ab != null) as Ability[]
+                );
+
+                const label = isFree
+                  ? 'Free Ability Boost'
+                  : `Ability Boost (${abilities.map(ab => ABILITY_SHORT[ab]).join(' or ')})`;
+
+                return (
+                  <div key={groupIndex}>
+                    <label className="text-xs text-stone-400 font-medium uppercase tracking-wide mb-1.5 block">
+                      {label} <span className="text-stone-500 normal-case">(choose 1)</span>
+                    </label>
+                    <div className="flex flex-wrap gap-1.5">
                       {abilities.map(ab => {
-                        const isSelected2 = character.abilityBoosts.background[ab];
+                        const isSelected = currentSelection === ab;
+                        const isDisabled = !isSelected && otherSelections.has(ab);
                         return (
                           <button
                             key={ab}
-                            onClick={() => toggleAbilityBoost('background', ab)}
+                            onClick={() => setBackgroundBoostGroup(groupIndex, isSelected ? null : ab)}
+                            disabled={isDisabled}
+                            title={isDisabled ? 'Already boosted by another selection' : undefined}
                             className={`px-2.5 py-1 rounded text-xs font-medium transition-colors ${
-                              isSelected2
-                                ? 'bg-amber-600 text-white'
-                                : 'bg-stone-800 text-stone-400 hover:bg-stone-700 hover:text-stone-300'
+                              isDisabled
+                                ? 'bg-stone-800/40 text-stone-600 cursor-not-allowed'
+                                : isSelected
+                                  ? 'bg-amber-600 text-white ring-1 ring-amber-400'
+                                  : 'bg-stone-800 text-stone-400 hover:bg-stone-700 hover:text-stone-300'
                             }`}
                           >
                             {ABILITY_SHORT[ab]}
@@ -76,9 +93,9 @@ export const BackgroundSection: React.FC = () => {
                         );
                       })}
                     </div>
-                  );
-                })}
-              </div>
+                  </div>
+                );
+              })}
             </div>
           )}
 
@@ -90,8 +107,8 @@ export const BackgroundSection: React.FC = () => {
               </label>
               <div className="flex flex-wrap gap-1.5 mt-1.5">
                 {(selected.system.trainedSkills?.value ?? []).map(skill => {
-                  const isChoiceSkill = skill === 'any';
-                  return isChoiceSkill ? (
+                  const isChoice = skill === 'any';
+                  return isChoice ? (
                     <SkillChoiceDropdown
                       key={skill}
                       label="Choose a skill"

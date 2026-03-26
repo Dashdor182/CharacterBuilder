@@ -31,6 +31,7 @@ interface CharacterStore {
   selectAncestryFreeFlaw: (ability: Ability | null) => void;
   setHeritage: (id: string | null) => void;
   setBackground: (id: string | null) => void;
+  setBackgroundBoostGroup: (groupIndex: number, ability: Ability | null) => void;
   setClass: (id: string | null, clearDependents?: boolean) => void;
   setKeyAbility: (ability: Ability | null) => void;
 
@@ -173,6 +174,7 @@ export const useCharacterStore = create<CharacterStore>()(
         character: {
           ...state.character,
           backgroundId: id,
+          backgroundBoostGroups: [],
           abilityBoosts: {
             ...state.character.abilityBoosts,
             background: {},
@@ -182,6 +184,29 @@ export const useCharacterStore = create<CharacterStore>()(
           updatedAt: Date.now(),
         },
       }));
+    },
+
+    setBackgroundBoostGroup: (groupIndex, ability) => {
+      set(state => {
+        const groups = [...(state.character.backgroundBoostGroups ?? [])];
+        groups[groupIndex] = ability;
+        // Rebuild background boosts from all group selections
+        const background: Partial<Record<Ability, boolean>> = {};
+        for (const ab of groups) {
+          if (ab) background[ab] = true;
+        }
+        return {
+          character: {
+            ...state.character,
+            backgroundBoostGroups: groups,
+            abilityBoosts: {
+              ...state.character.abilityBoosts,
+              background,
+            },
+            updatedAt: Date.now(),
+          },
+        };
+      });
     },
 
     setClass: (id, clearDependents = true) => {
