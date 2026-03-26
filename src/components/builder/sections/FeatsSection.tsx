@@ -275,7 +275,8 @@ const FeatPickerModal: React.FC<{
       const featLevel = f.system.level?.value ?? 1;
       if (featLevel > slot.level) return false;
 
-      const featType = f.system.featType?.value ?? '';
+      // pf2e 7.x uses system.category; older versions used system.featType.value
+      const featType = (f.system.category ?? f.system.featType?.value ?? '') as string;
       const traits: string[] = f.system.traits?.value ?? [];
 
       switch (slot.type) {
