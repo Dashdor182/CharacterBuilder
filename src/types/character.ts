@@ -118,6 +118,7 @@ export interface CharacterState {
   backgroundId: string | null;
   classId: string | null;
   keyAbility: Ability | null;    // chosen from class options
+  backgroundBoostGroups: (Ability | null)[];  // one selection per background boost group
 
   // Ability Scores
   abilityBoosts: AbilityBoostState;
@@ -206,6 +207,7 @@ export const EMPTY_CHARACTER: CharacterState = {
   backgroundId: null,
   classId: null,
   keyAbility: null,
+  backgroundBoostGroups: [],
   abilityBoosts: {
     ancestryFixed: {},
     ancestryFlawFixed: {},

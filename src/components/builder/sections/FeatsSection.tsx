@@ -227,7 +227,7 @@ const FeatPickerModal: React.FC<{
   onClose: () => void;
 }> = ({ slot, character, gameData, onSelect, onClose }) => {
   const [search, setSearch] = useState('');
-  const [showInvalid, setShowInvalid] = useState(false);
+  const [showInvalid, setShowInvalid] = useState(true);
   const { showTooltip, hideTooltip } = useUiStore();
 
   const computed = useMemo(
@@ -235,10 +235,16 @@ const FeatPickerModal: React.FC<{
     [character, gameData]
   );
 
-  const filteredFeats = useMemo((): PF2eFeat[] => {
-    const cls = gameData.classes.find(c => c._id === character.classId);
-    const ancestry = gameData.ancestries.find(a => a._id === character.ancestryId);
+  const cls = gameData.classes.find(c => c._id === character.classId);
+  const ancestry = gameData.ancestries.find(a => a._id === character.ancestryId);
 
+  // Explain why feats might be unavailable to pick
+  const missingRequirement =
+    slot.type === 'class' && !cls ? 'Select a class to see class feats.' :
+    slot.type === 'ancestry' && !ancestry ? 'Select an ancestry to see ancestry feats.' :
+    null;
+
+  const filteredFeats = useMemo((): PF2eFeat[] => {
     let feats = gameData.feats.filter((f: PF2eFeat) => {
       const featLevel = f.system.level?.value ?? 1;
       if (featLevel > slot.level) return false;
@@ -277,7 +283,7 @@ const FeatPickerModal: React.FC<{
       const lb = b.system.level?.value ?? 1;
       return la - lb || a.name.localeCompare(b.name);
     });
-  }, [gameData, slot, character, search]);
+  }, [gameData, slot, cls, ancestry, character, search]);
 
   const { valid, invalid } = useMemo(() => {
     const valid: typeof filteredFeats = [];
@@ -291,7 +297,9 @@ const FeatPickerModal: React.FC<{
     return { valid, invalid };
   }, [filteredFeats, character, computed, gameData, slot.level]);
 
-  const displayFeats = showInvalid ? filteredFeats : valid;
+  // Auto-show invalid feats if there are no valid ones to show
+  const effectiveShowInvalid = showInvalid || (valid.length === 0 && invalid.length > 0);
+  const displayFeats = effectiveShowInvalid ? filteredFeats : valid;
 
   return (
     <Modal
@@ -301,27 +309,36 @@ const FeatPickerModal: React.FC<{
       maxWidth="max-w-2xl"
     >
       <div className="space-y-3">
-        <div className="flex gap-2">
-          <SearchBar
-            value={search}
-            onChange={setSearch}
-            placeholder="Search feats…"
-            className="flex-1"
-          />
-          <label className="flex items-center gap-1.5 text-xs text-stone-400 whitespace-nowrap">
-            <input
-              type="checkbox"
-              checked={showInvalid}
-              onChange={e => setShowInvalid(e.target.checked)}
-              className="accent-amber-500"
+        {missingRequirement ? (
+          <p className="text-amber-500/80 text-sm py-2">{missingRequirement}</p>
+        ) : (
+          <div className="flex gap-2">
+            <SearchBar
+              value={search}
+              onChange={setSearch}
+              placeholder="Search feats…"
+              className="flex-1"
             />
-            Show ineligible ({invalid.length})
-          </label>
-        </div>
+            <label className="flex items-center gap-1.5 text-xs text-stone-400 whitespace-nowrap">
+              <input
+                type="checkbox"
+                checked={showInvalid}
+                onChange={e => setShowInvalid(e.target.checked)}
+                className="accent-amber-500"
+              />
+              Show ineligible ({invalid.length})
+            </label>
+          </div>
+        )}
 
-        <div className="text-xs text-stone-500">
-          {valid.length} eligible feat{valid.length !== 1 ? 's' : ''}
-        </div>
+        {!missingRequirement && (
+          <div className="text-xs text-stone-500">
+            {valid.length} eligible · {filteredFeats.length} total
+            {effectiveShowInvalid && !showInvalid && valid.length === 0 && (
+              <span className="text-amber-500/70 ml-2">Showing all — none currently meet prerequisites</span>
+            )}
+          </div>
+        )}
 
         <div className="space-y-1 max-h-96 overflow-y-auto pr-1">
           {displayFeats.map(feat => {
