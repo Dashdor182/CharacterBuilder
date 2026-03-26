@@ -270,8 +270,23 @@ export const FeatPickerModal: React.FC<{
     slot.type === 'ancestry' && !ancestry ? 'Select an ancestry to see ancestry feats.' :
     null;
 
+  // All feat IDs already chosen elsewhere (to prevent duplicates)
+  const takenFeatIds = useMemo(() => {
+    const taken = new Set<string>();
+    for (const lvl of character.levels) {
+      for (const f of lvl.feats) {
+        if (f.selectedFeatId && f.id !== slot.id) taken.add(f.selectedFeatId);
+      }
+    }
+    for (const f of character.bonusFeats) {
+      if (f.selectedFeatId && f.id !== slot.id) taken.add(f.selectedFeatId);
+    }
+    return taken;
+  }, [character.levels, character.bonusFeats, slot.id]);
+
   const filteredFeats = useMemo((): PF2eFeat[] => {
     let feats = gameData.feats.filter((f: PF2eFeat) => {
+      if (takenFeatIds.has(f._id)) return false;
       const featLevel = f.system.level?.value ?? 1;
       if (featLevel > slot.level) return false;
 
@@ -310,7 +325,7 @@ export const FeatPickerModal: React.FC<{
       const lb = b.system.level?.value ?? 1;
       return la - lb || a.name.localeCompare(b.name);
     });
-  }, [gameData, slot, cls, ancestry, character, search]);
+  }, [gameData, slot, cls, ancestry, character, search, takenFeatIds]);
 
   const { valid, invalid } = useMemo(() => {
     const valid: typeof filteredFeats = [];
