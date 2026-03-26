@@ -35,6 +35,7 @@ export const AncestrySection: React.FC = () => {
             : rarity === 'uncommon'
               ? 'bg-amber-900/50 text-amber-500'
               : undefined,
+          rawItem: a,
         };
       });
   }, [gameData]);
@@ -62,6 +63,7 @@ export const AncestrySection: React.FC = () => {
         selectedId={character.ancestryId}
         onSelect={id => setAncestry(id)}
         placeholder="Choose an ancestry…"
+        modalTitle="Select Ancestry"
         searchPlaceholder="Search ancestries…"
       />
 

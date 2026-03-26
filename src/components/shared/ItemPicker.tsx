@@ -1,11 +1,17 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
+import type { FoundryItem } from '../../types/pf2e';
+import { useUiStore } from '../../store/uiStore';
+import { Modal } from './Modal';
+import { TooltipTrigger } from './Tooltip';
+import { SearchBar } from './SearchBar';
 
-interface PickerItem {
+export interface PickerItem {
   id: string;
   name: string;
   subtitle?: string;
   tag?: string;
   tagColor?: string;
+  rawItem?: FoundryItem;
 }
 
 interface ItemPickerProps {
@@ -13,59 +19,37 @@ interface ItemPickerProps {
   selectedId: string | null;
   onSelect: (id: string | null) => void;
   placeholder: string;
+  modalTitle?: string;
   searchPlaceholder?: string;
 }
 
 /**
- * Compact searchable dropdown for selecting a single item from a large list.
- * Shows the selected item name inline; clicking opens a search + scrollable list.
+ * Compact picker that opens a full Modal with search and tooltip-enabled rows.
  */
 export const ItemPicker: React.FC<ItemPickerProps> = ({
-  items, selectedId, onSelect, placeholder, searchPlaceholder,
+  items, selectedId, onSelect, placeholder, modalTitle, searchPlaceholder,
 }) => {
   const [open, setOpen] = useState(false);
-  const [search, setSearch] = useState('');
-  const containerRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const { showTooltip, hideTooltip } = useUiStore();
 
   const selected = items.find(i => i.id === selectedId) ?? null;
 
-  const filtered = search
-    ? items.filter(i => i.name.toLowerCase().includes(search.toLowerCase()))
-    : items;
-
-  useEffect(() => {
-    if (open) {
-      setSearch('');
-      setTimeout(() => inputRef.current?.focus(), 50);
-    }
-  }, [open]);
-
-  // Close on outside click
-  useEffect(() => {
-    if (!open) return;
-    const handler = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [open]);
+  const handleSelect = (id: string) => {
+    onSelect(id === selectedId ? null : id);
+    setOpen(false);
+  };
 
   return (
-    <div ref={containerRef} className="relative">
+    <>
       {/* Trigger button */}
       <button
         type="button"
-        onClick={() => setOpen(v => !v)}
+        onClick={() => setOpen(true)}
         className={`
           w-full flex items-center gap-2 px-3 py-2 rounded-lg border text-sm transition-colors text-left
-          ${open
-            ? 'border-amber-500 bg-stone-800 text-stone-200'
-            : selected
-              ? 'border-amber-600/60 bg-stone-800/80 text-stone-200 hover:border-amber-500'
-              : 'border-stone-700 bg-stone-900 text-stone-500 hover:border-stone-600 hover:text-stone-400'
+          ${selected
+            ? 'border-amber-600/60 bg-stone-800/80 text-stone-200 hover:border-amber-500'
+            : 'border-stone-700 bg-stone-900 text-stone-500 hover:border-stone-600 hover:text-stone-400'
           }
         `}
       >
@@ -85,59 +69,99 @@ export const ItemPicker: React.FC<ItemPickerProps> = ({
             ×
           </span>
         )}
-        <svg className={`w-3.5 h-3.5 text-stone-500 flex-shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+        <svg className="w-3.5 h-3.5 text-stone-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
         </svg>
       </button>
 
-      {/* Dropdown */}
+      {/* Modal picker */}
       {open && (
-        <div className="absolute z-30 top-full left-0 right-0 mt-1 bg-stone-900 border border-stone-700 rounded-lg shadow-xl overflow-hidden">
-          {/* Search */}
-          <div className="p-2 border-b border-stone-800">
-            <input
-              ref={inputRef}
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              placeholder={searchPlaceholder ?? 'Search…'}
-              className="w-full bg-stone-800 border border-stone-700 rounded px-3 py-1.5 text-sm text-stone-200
-                         placeholder:text-stone-600 focus:outline-none focus:ring-1 focus:ring-amber-500"
-            />
-          </div>
+        <PickerModal
+          items={items}
+          selectedId={selectedId}
+          title={modalTitle ?? placeholder}
+          searchPlaceholder={searchPlaceholder}
+          onSelect={handleSelect}
+          onClose={() => setOpen(false)}
+          showTooltip={showTooltip}
+          hideTooltip={hideTooltip}
+        />
+      )}
+    </>
+  );
+};
 
-          {/* List */}
-          <div className="max-h-60 overflow-y-auto">
-            {filtered.length === 0 ? (
-              <p className="text-stone-600 text-xs px-3 py-4 text-center">No results</p>
-            ) : (
-              filtered.map(item => (
+const PickerModal: React.FC<{
+  items: PickerItem[];
+  selectedId: string | null;
+  title: string;
+  searchPlaceholder?: string;
+  onSelect: (id: string) => void;
+  onClose: () => void;
+  showTooltip: (item: FoundryItem, rect: { x: number; y: number; width: number; height: number }) => void;
+  hideTooltip: () => void;
+}> = ({ items, selectedId, title, searchPlaceholder, onSelect, onClose, showTooltip, hideTooltip }) => {
+  const [search, setSearch] = useState('');
+
+  const filtered = useMemo(() => {
+    const q = search.toLowerCase();
+    return q ? items.filter(i => i.name.toLowerCase().includes(q)) : items;
+  }, [items, search]);
+
+  return (
+    <Modal open onClose={onClose} title={title} maxWidth="max-w-2xl">
+      <div className="space-y-3">
+        <SearchBar value={search} onChange={setSearch} placeholder={searchPlaceholder ?? 'Search…'} />
+
+        <div className="space-y-1 max-h-[60vh] overflow-y-auto pr-1">
+          {filtered.length === 0 ? (
+            <p className="text-stone-600 text-sm py-4 text-center">No results.</p>
+          ) : (
+            filtered.map(item => {
+              const isSelected = item.id === selectedId;
+
+              const row = (
                 <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => { onSelect(item.id); setOpen(false); }}
+                  onClick={() => onSelect(item.id)}
+                  onMouseLeave={item.rawItem ? hideTooltip : undefined}
                   className={`
-                    w-full flex items-center gap-2 px-3 py-2 text-sm text-left transition-colors
-                    ${item.id === selectedId
-                      ? 'bg-amber-600/20 text-amber-300'
-                      : 'text-stone-300 hover:bg-stone-800 hover:text-stone-100'
+                    w-full text-left px-3 py-2.5 rounded border text-sm transition-all
+                    ${isSelected
+                      ? 'border-amber-500 bg-amber-600/20 text-amber-300'
+                      : 'border-stone-700/50 bg-stone-800/50 text-stone-300 hover:border-amber-600/50 hover:bg-stone-800 hover:text-stone-100'
                     }
                   `}
                 >
-                  <span className="flex-1 truncate">{item.name}</span>
-                  {item.subtitle && (
-                    <span className="text-xs text-stone-500 flex-shrink-0">{item.subtitle}</span>
-                  )}
-                  {item.tag && (
-                    <span className={`text-xs px-1.5 py-0.5 rounded flex-shrink-0 ${item.tagColor ?? 'bg-stone-700 text-stone-400'}`}>
-                      {item.tag}
-                    </span>
-                  )}
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium flex-1 truncate">{item.name}</span>
+                    {item.tag && (
+                      <span className={`text-xs px-1.5 py-0.5 rounded flex-shrink-0 ${item.tagColor ?? 'bg-stone-700 text-stone-400'}`}>
+                        {item.tag}
+                      </span>
+                    )}
+                    {item.subtitle && (
+                      <span className="text-xs text-stone-500 flex-shrink-0">{item.subtitle}</span>
+                    )}
+                  </div>
                 </button>
-              ))
-            )}
-          </div>
+              );
+
+              return item.rawItem ? (
+                <TooltipTrigger
+                  key={item.id}
+                  item={item.rawItem}
+                  onShow={(raw, rect) => showTooltip(raw, rect)}
+                  className="block"
+                >
+                  {row}
+                </TooltipTrigger>
+              ) : (
+                <div key={item.id}>{row}</div>
+              );
+            })
+          )}
         </div>
-      )}
-    </div>
+      </div>
+    </Modal>
   );
 };

@@ -19,6 +19,7 @@ export const BackgroundSection: React.FC = () => {
           id: b._id,
           name: b.name,
           subtitle: skills.length > 0 ? skills.join(', ') : undefined,
+          rawItem: b,
         };
       });
   }, [gameData]);
@@ -34,6 +35,7 @@ export const BackgroundSection: React.FC = () => {
         selectedId={character.backgroundId}
         onSelect={id => setBackground(id)}
         placeholder="Choose a background…"
+        modalTitle="Select Background"
         searchPlaceholder="Search backgrounds…"
       />
 

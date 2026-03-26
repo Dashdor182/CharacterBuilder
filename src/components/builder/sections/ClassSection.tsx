@@ -21,6 +21,7 @@ export const ClassSection: React.FC = () => {
           id: c._id,
           name: c.name,
           subtitle: `${c.system.hp} HP${keyAbilities.length > 0 ? ` · ${keyAbilities.map(a => ABILITY_SHORT[a as Ability]).join('/')}` : ''}`,
+          rawItem: c,
         };
       });
   }, [gameData]);
@@ -51,6 +52,7 @@ export const ClassSection: React.FC = () => {
         selectedId={character.classId}
         onSelect={handleSelect}
         placeholder="Choose a class…"
+        modalTitle="Select Class"
         searchPlaceholder="Search classes…"
       />
 
