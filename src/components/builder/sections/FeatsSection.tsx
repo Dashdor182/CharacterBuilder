@@ -5,6 +5,7 @@ import { useUiStore } from '../../../store/uiStore';
 import { SearchBar } from '../../shared/SearchBar';
 import { TooltipTrigger } from '../../shared/Tooltip';
 import { Modal } from '../../shared/Modal';
+import { clearCache } from '../../../data/loader';
 import { checkFeatPrerequisites } from '../../../utils/prerequisites';
 import { computeStats } from '../../../utils/calculations';
 import {
@@ -114,7 +115,7 @@ export const FeatsSection: React.FC = () => {
           The feats pack failed to load (usually a GitHub API rate limit). Your other data is fine.
         </p>
         <button
-          onClick={() => { localStorage.removeItem('pf2e_gamedata_v4'); window.location.reload(); }}
+          onClick={async () => { await clearCache(); window.location.reload(); }}
           className="px-3 py-1.5 bg-amber-700 hover:bg-amber-600 text-white rounded text-xs font-medium transition-colors"
         >
           Clear cache &amp; reload
