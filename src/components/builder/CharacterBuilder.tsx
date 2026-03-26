@@ -14,17 +14,26 @@ import { FeatsSection } from './sections/FeatsSection';
 import { SpellsSection } from './sections/SpellsSection';
 import { EquipmentSection } from './sections/EquipmentSection';
 
-const SECTIONS = [
+// Left column: character identity & core stats
+const LEFT_SECTIONS = [
   { id: 'identity', title: 'Identity', icon: '👤' },
   { id: 'ancestry', title: 'Ancestry & Heritage', icon: '🌿' },
   { id: 'background', title: 'Background', icon: '📜' },
   { id: 'class', title: 'Class', icon: '⚔️' },
   { id: 'ability-scores', title: 'Ability Scores', icon: '💪' },
+] as const;
+
+// Right column: skills, feats, equipment
+const RIGHT_SECTIONS = [
   { id: 'skills', title: 'Skills', icon: '🎯' },
   { id: 'feats', title: 'Feats', icon: '⭐' },
   { id: 'spells', title: 'Spells', icon: '✨' },
   { id: 'equipment', title: 'Equipment', icon: '🎒' },
 ] as const;
+
+type SectionId =
+  | typeof LEFT_SECTIONS[number]['id']
+  | typeof RIGHT_SECTIONS[number]['id'];
 
 export const CharacterBuilder: React.FC = () => {
   const { character, setCurrentLevel } = useCharacterStore();
@@ -33,8 +42,7 @@ export const CharacterBuilder: React.FC = () => {
 
   const isSectionOpen = (id: string) => !collapsedSections.has(id);
 
-  // Badge values for sections
-  const sectionBadges: Partial<Record<typeof SECTIONS[number]['id'], string | number>> = {
+  const sectionBadges: Partial<Record<SectionId, string | number>> = {
     ancestry: character.ancestryId
       ? gameData?.ancestries.find(a => a._id === character.ancestryId)?.name
       : undefined,
@@ -49,28 +57,42 @@ export const CharacterBuilder: React.FC = () => {
     equipment: character.equipment.length || undefined,
   };
 
-  return (
-    <div className="max-w-4xl mx-auto px-4 pb-8 pt-4 space-y-3">
-      {/* Level Selector */}
-      <LevelSelector
-        currentLevel={character.currentLevel}
-        onSelect={setCurrentLevel}
-      />
+  const renderSection = (id: SectionId, title: string, icon: string) => (
+    <Collapsible
+      key={id}
+      id={id}
+      title={title}
+      icon={icon}
+      badge={sectionBadges[id]}
+      collapsed={!isSectionOpen(id)}
+      onToggle={() => toggleSection(id)}
+    >
+      <SectionContent id={id} />
+    </Collapsible>
+  );
 
-      {/* Sections */}
-      {SECTIONS.map(({ id, title, icon }) => (
-        <Collapsible
-          key={id}
-          id={id}
-          title={title}
-          icon={icon}
-          badge={sectionBadges[id as keyof typeof sectionBadges]}
-          collapsed={!isSectionOpen(id)}
-          onToggle={() => toggleSection(id)}
-        >
-          <SectionContent id={id} />
-        </Collapsible>
-      ))}
+  return (
+    <div className="max-w-7xl mx-auto px-4 pb-8 pt-4">
+      {/* Level Selector */}
+      <div className="mb-4">
+        <LevelSelector
+          currentLevel={character.currentLevel}
+          onSelect={setCurrentLevel}
+        />
+      </div>
+
+      {/* Two-column layout on large screens */}
+      <div className="lg:grid lg:grid-cols-2 lg:gap-4 space-y-3 lg:space-y-0">
+        {/* Left column */}
+        <div className="space-y-3">
+          {LEFT_SECTIONS.map(({ id, title, icon }) => renderSection(id, title, icon))}
+        </div>
+
+        {/* Right column */}
+        <div className="space-y-3">
+          {RIGHT_SECTIONS.map(({ id, title, icon }) => renderSection(id, title, icon))}
+        </div>
+      </div>
     </div>
   );
 };

@@ -1,71 +1,42 @@
-import React, { useState, useMemo } from 'react';
+import React, { useMemo } from 'react';
 import { useCharacterStore } from '../../../store/characterStore';
 import { useDataStore } from '../../../store/dataStore';
-import { useUiStore } from '../../../store/uiStore';
-import { SearchBar } from '../../shared/SearchBar';
-import { TooltipTrigger } from '../../shared/Tooltip';
+import { ItemPicker } from '../../shared/ItemPicker';
 import { ABILITY_SHORT } from '../../../utils/calculations';
 import type { Ability } from '../../../types/pf2e';
 
 export const BackgroundSection: React.FC = () => {
   const { character, setBackground, toggleAbilityBoost, setBackgroundSkill } = useCharacterStore();
   const { gameData } = useDataStore();
-  const { showTooltip, hideTooltip } = useUiStore();
-  const [search, setSearch] = useState('');
 
-  const backgrounds = useMemo(() => {
+  const backgroundItems = useMemo(() => {
     if (!gameData) return [];
-    const q = search.toLowerCase();
     return gameData.backgrounds
-      .filter(b => !q || b.name.toLowerCase().includes(q))
-      .sort((a, b) => a.name.localeCompare(b.name));
-  }, [gameData, search]);
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .map(b => {
+        const skills = b.system.trainedSkills?.value ?? [];
+        return {
+          id: b._id,
+          name: b.name,
+          subtitle: skills.length > 0 ? skills.join(', ') : undefined,
+        };
+      });
+  }, [gameData]);
 
   const selected = gameData?.backgrounds.find(b => b._id === character.backgroundId) ?? null;
 
   if (!gameData) return <p className="text-stone-500 text-sm">Loading data…</p>;
 
   return (
-    <div className="space-y-5">
-      <SearchBar value={search} onChange={setSearch} placeholder="Search backgrounds…" />
+    <div className="space-y-4">
+      <ItemPicker
+        items={backgroundItems}
+        selectedId={character.backgroundId}
+        onSelect={id => setBackground(id)}
+        placeholder="Choose a background…"
+        searchPlaceholder="Search backgrounds…"
+      />
 
-      {/* Background list */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
-        {backgrounds.map(b => {
-          const isSelected = b._id === character.backgroundId;
-          const trainedSkills = b.system.trainedSkills?.value ?? [];
-
-          return (
-            <TooltipTrigger
-              key={b._id}
-              item={b}
-              onShow={(item, rect) => showTooltip(item, rect)}
-              className="block"
-            >
-              <button
-                onClick={() => setBackground(isSelected ? null : b._id)}
-                onMouseLeave={hideTooltip}
-                className={`
-                  w-full text-left px-3 py-2.5 rounded-lg border transition-all text-sm
-                  ${isSelected
-                    ? 'border-amber-500 bg-amber-600/20 text-amber-300'
-                    : 'border-stone-700/50 bg-stone-900/50 text-stone-400 hover:border-stone-600 hover:text-stone-300 hover:bg-stone-800/50'
-                  }
-                `}
-              >
-                <div className="font-medium">{b.name}</div>
-                {trainedSkills.length > 0 && (
-                  <div className="text-xs text-stone-500 mt-0.5 capitalize">
-                    {trainedSkills.join(', ')}
-                  </div>
-                )}
-              </button>
-            </TooltipTrigger>
-          );
-        })}
-      </div>
-
-      {/* Selected background details */}
       {selected && (
         <div className="space-y-4 border-t border-stone-700/50 pt-4">
           <h3 className="text-amber-400 font-semibold">{selected.name}</h3>
