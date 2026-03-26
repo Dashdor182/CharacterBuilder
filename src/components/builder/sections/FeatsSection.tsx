@@ -245,7 +245,7 @@ const FeatSlotRow: React.FC<{
   );
 };
 
-const FeatPickerModal: React.FC<{
+export const FeatPickerModal: React.FC<{
   slot: FeatSlot & { levelIndex: number };
   character: CharacterState;
   gameData: GameData;
