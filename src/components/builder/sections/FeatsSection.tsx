@@ -106,6 +106,23 @@ export const FeatsSection: React.FC = () => {
 
   if (!gameData) return <p className="text-stone-500 text-sm">Loading data…</p>;
 
+  if (gameData.feats.length === 0) {
+    return (
+      <div className="rounded-lg border border-amber-700/40 bg-amber-900/20 p-4 text-sm space-y-2">
+        <p className="text-amber-300 font-medium">Feats data not loaded</p>
+        <p className="text-stone-400">
+          The feats pack failed to load (usually a GitHub API rate limit). Your other data is fine.
+        </p>
+        <button
+          onClick={() => { localStorage.removeItem('pf2e_gamedata_v4'); window.location.reload(); }}
+          className="px-3 py-1.5 bg-amber-700 hover:bg-amber-600 text-white rounded text-xs font-medium transition-colors"
+        >
+          Clear cache &amp; reload
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-3">
       {featSlots.length === 0 && (

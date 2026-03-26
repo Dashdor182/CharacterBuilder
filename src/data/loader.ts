@@ -293,7 +293,7 @@ export function loadFromCache(): GameData | null {
     if (!raw) return null;
     const data = JSON.parse(raw) as GameData;
     if (!data.loadedAt || Date.now() - data.loadedAt > CACHE_TTL) return null;
-    if (!data.ancestries?.length || !data.classes?.length) return null;
+    if (!data.ancestries?.length || !data.classes?.length || !data.feats?.length) return null;
     return data;
   } catch { return null; }
 }
